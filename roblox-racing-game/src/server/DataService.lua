@@ -88,6 +88,10 @@ local function sanitize(data)
 		data.selectedCar = "Hatch"
 	end
 	data.owned.Hatch = true
+	if data.level > Levels.MAX then
+		data.level = Levels.MAX
+		data.xp = 0
+	end
 	for carId in data.owned do
 		if Cars.List[carId] then
 			DataService.EnsureCar(data, carId)
@@ -141,6 +145,7 @@ function DataService.View(player)
 		xp = d.xp,
 		level = d.level,
 		xpNeeded = Levels.XPForLevel(d.level),
+		maxLevel = Levels.MAX,
 		selectedCar = d.selectedCar,
 		owned = d.owned,
 		upgrades = d.upgrades,
@@ -192,18 +197,29 @@ function DataService.SpendCoins(player, amount)
 	return true
 end
 
+-- Adds XP and handles level-ups. Returns the coins that capped XP was
+-- converted into (0 below the level cap).
 function DataService.AddXP(player, amount)
 	local d = DataService.Get(player)
 	if not d then
-		return
+		return 0
 	end
 	d.xp += math.floor(amount)
 	while d.level < Levels.MAX and d.xp >= Levels.XPForLevel(d.level) do
 		d.xp -= Levels.XPForLevel(d.level)
 		d.level += 1
 		local bonus = Levels.LevelReward(d.level)
+		if d.level >= Levels.MAX then
+			bonus += Levels.MAX_LEVEL_BONUS
+			DataService.Notify(
+				player,
+				string.format("MAX LEVEL %d REACHED!  (+%d coins) XP now converts to coins.", d.level, bonus),
+				"levelup"
+			)
+		else
+			DataService.Notify(player, string.format("LEVEL UP! You reached level %d  (+%d coins)", d.level, bonus), "levelup")
+		end
 		d.coins += bonus
-		DataService.Notify(player, string.format("LEVEL UP! You reached level %d  (+%d coins)", d.level, bonus), "levelup")
 		for _, carId in Cars.Order do
 			if Cars.List[carId].level == d.level then
 				DataService.Notify(player, Cars.List[carId].name .. " is now available in the Garage!", "success")
@@ -211,8 +227,13 @@ function DataService.AddXP(player, amount)
 		end
 	end
 	if d.level >= Levels.MAX then
-		d.xp = math.min(d.xp, Levels.XPForLevel(d.level))
+		-- At the cap, XP turns into coins instead.
+		local coins = math.floor(d.xp * Levels.MAX_XP_TO_COINS)
+		d.xp = 0
+		d.coins += coins
+		return coins
 	end
+	return 0
 end
 
 ---------------------------------------------------------------------------

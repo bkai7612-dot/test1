@@ -214,6 +214,14 @@ local function waitFor(pred, maxSeconds, label)
 end
 
 local finishInfo
+local lastResult
+game.ReplicatedStorage.Remotes.RaceResults.OnClientEvent:Connect(function(payload)
+	for _, entry in payload.results do
+		if entry.userId == player.UserId then
+			lastResult = entry
+		end
+	end
+end)
 game.ReplicatedStorage.Remotes.Checkpoint.OnClientEvent:Connect(function(info)
 	if info.finished then
 		finishInfo = info
@@ -271,6 +279,7 @@ for idx, mapId in Maps.Order do
 	check(State.data.stats.races == idx, "race counted (" .. State.data.stats.races .. ")")
 	print("   coins/level/xp:", State.data.coins, State.data.level, State.data.xp)
 	check(State.data.bestTimes[mapId] ~= nil, "best time recorded")
+	check(lastResult ~= nil and lastResult.xp == Config.Rewards.xpSolo, "solo race gives flat solo XP")
 end
 
 -- DNF path: join a race and leave the car mid-race ------------------------------------
@@ -289,6 +298,25 @@ check(CarService.Get(player) == nil, "car removed on death")
 waitFor(function()
 	return State.race.phase == "Intermission" or State.race.phase == "Waiting"
 end, 30, "race ended after DNF")
+
+-- Level cap ----------------------------------------------------------------------------------
+print("== level cap")
+local Levels = G.require(Shared.Levels)
+local d = DataService.Get(player)
+d.level = Levels.MAX - 1
+d.xp = 0
+local coinsBefore = d.coins
+local converted = DataService.AddXP(player, Levels.XPForLevel(Levels.MAX - 1) + 1000)
+check(d.level == Levels.MAX, "reached level cap " .. Levels.MAX)
+check(converted == 500, "overflow XP converted to coins (" .. converted .. ")")
+check(d.coins == coinsBefore + Levels.LevelReward(Levels.MAX) + Levels.MAX_LEVEL_BONUS + 500, "cap bonus paid")
+converted = DataService.AddXP(player, 200)
+check(d.level == Levels.MAX and d.xp == 0 and converted == 100, "no levels past the cap")
+DataService.Push(player)
+G.run(0.2)
+check(State.data.maxLevel == Levels.MAX and State.data.level == Levels.MAX, "client sees max level")
+check(Config.Rewards.xpByPlace[1] > Config.Rewards.xpByPlace[2] and Config.Rewards.xpByPlace[2] > Config.Rewards.xpByPlace[3]
+	and Config.Rewards.xpByPlace[3] > Config.Rewards.xpFinish, "placement XP ordered 1st > 2nd > 3rd > finish")
 
 -- Save --------------------------------------------------------------------------------------
 print("== save")

@@ -291,11 +291,15 @@ local function awardRewards(standings)
 	local results = {}
 	for _, entry in standings do
 		local player, racer = entry.player, entry.racer
-		local coins, xp, newBest = 0, 0, false
+		local coins, xp, newBest, xpCoins = 0, 0, false, 0
 		if racer.finished then
 			local beaten = #standings - racer.place
 			coins = R.base + R.perLap * state.laps + R.perBeaten * beaten + (R.placeBonus[racer.place] or 0)
-			xp = R.xpBase + R.xpPerLap * state.laps + R.xpPerBeaten * beaten + (R.xpPlaceBonus[racer.place] or 0)
+			if #standings == 1 then
+				xp = R.xpSolo
+			else
+				xp = R.xpByPlace[racer.place] or R.xpFinish
+			end
 		else
 			coins, xp = R.dnfCoins, R.dnfXP
 		end
@@ -326,7 +330,7 @@ local function awardRewards(standings)
 				data.stats.podiums += 1
 			end
 			DataService.AddCoins(player, coins)
-			DataService.AddXP(player, xp)
+			xpCoins = DataService.AddXP(player, xp)
 			DataService.Push(player)
 		end
 
@@ -337,6 +341,7 @@ local function awardRewards(standings)
 			time = racer.finished and racer.finishTime or nil,
 			coins = coins,
 			xp = xp,
+			xpCoins = xpCoins, -- XP converted to coins at the level cap
 			newBest = newBest,
 		})
 	end

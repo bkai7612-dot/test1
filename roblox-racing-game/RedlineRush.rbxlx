@@ -829,10 +829,12 @@ Config.Rewards = {
 	perLap = 50,
 	perBeaten = 100, -- per opponent finished ahead of
 	placeBonus = { 200, 120, 60 },
-	xpBase = 60,
-	xpPerLap = 15,
-	xpPerBeaten = 25,
-	xpPlaceBonus = { 80, 50, 30 },
+	-- XP by finishing position when 2+ players race.
+	xpByPlace = { 250, 175, 125 }, -- 1st, 2nd, 3rd
+	xpFinish = 75, -- 4th place and below
+	-- Racing alone always gives 1st place, so it earns a flat amount instead
+	-- of podium XP (stops solo farming, still rewards practising).
+	xpSolo = 100,
 	newBestCoins = 150,
 	dnfCoins = 60,
 	dnfXP = 20,
@@ -1001,7 +1003,16 @@ return Customization
           <string name="Source"><![CDATA[-- Player levelling curve.
 local Levels = {}
 
-Levels.MAX = 100
+-- Level cap. Every car and cosmetic unlocks well before this (level 20),
+-- so the cap is the long-term goal.
+Levels.MAX = 50
+
+-- One-off coin bonus for reaching the cap.
+Levels.MAX_LEVEL_BONUS = 5000
+
+-- Once capped, XP from races is converted into coins at this rate, so
+-- racing still pays off.
+Levels.MAX_XP_TO_COINS = 0.5
 
 -- XP required to go from `level` to `level + 1`.
 function Levels.XPForLevel(level)
@@ -1859,6 +1870,10 @@ local function sanitize(data)
 		data.selectedCar = "Hatch"
 	end
 	data.owned.Hatch = true
+	if data.level > Levels.MAX then
+		data.level = Levels.MAX
+		data.xp = 0
+	end
 	for carId in data.owned do
 		if Cars.List[carId] then
 			DataService.EnsureCar(data, carId)
@@ -1912,6 +1927,7 @@ function DataService.View(player)
 		xp = d.xp,
 		level = d.level,
 		xpNeeded = Levels.XPForLevel(d.level),
+		maxLevel = Levels.MAX,
 		selectedCar = d.selectedCar,
 		owned = d.owned,
 		upgrades = d.upgrades,
@@ -1963,18 +1979,29 @@ function DataService.SpendCoins(player, amount)
 	return true
 end
 
+-- Adds XP and handles level-ups. Returns the coins that capped XP was
+-- converted into (0 below the level cap).
 function DataService.AddXP(player, amount)
 	local d = DataService.Get(player)
 	if not d then
-		return
+		return 0
 	end
 	d.xp += math.floor(amount)
 	while d.level < Levels.MAX and d.xp >= Levels.XPForLevel(d.level) do
 		d.xp -= Levels.XPForLevel(d.level)
 		d.level += 1
 		local bonus = Levels.LevelReward(d.level)
+		if d.level >= Levels.MAX then
+			bonus += Levels.MAX_LEVEL_BONUS
+			DataService.Notify(
+				player,
+				string.format("MAX LEVEL %d REACHED!  (+%d coins) XP now converts to coins.", d.level, bonus),
+				"levelup"
+			)
+		else
+			DataService.Notify(player, string.format("LEVEL UP! You reached level %d  (+%d coins)", d.level, bonus), "levelup")
+		end
 		d.coins += bonus
-		DataService.Notify(player, string.format("LEVEL UP! You reached level %d  (+%d coins)", d.level, bonus), "levelup")
 		for _, carId in Cars.Order do
 			if Cars.List[carId].level == d.level then
 				DataService.Notify(player, Cars.List[carId].name .. " is now available in the Garage!", "success")
@@ -1982,8 +2009,13 @@ function DataService.AddXP(player, amount)
 		end
 	end
 	if d.level >= Levels.MAX then
-		d.xp = math.min(d.xp, Levels.XPForLevel(d.level))
+		-- At the cap, XP turns into coins instead.
+		local coins = math.floor(d.xp * Levels.MAX_XP_TO_COINS)
+		d.xp = 0
+		d.coins += coins
+		return coins
 	end
+	return 0
 end
 
 ---------------------------------------------------------------------------
@@ -2912,11 +2944,15 @@ local function awardRewards(standings)
 	local results = {}
 	for _, entry in standings do
 		local player, racer = entry.player, entry.racer
-		local coins, xp, newBest = 0, 0, false
+		local coins, xp, newBest, xpCoins = 0, 0, false, 0
 		if racer.finished then
 			local beaten = #standings - racer.place
 			coins = R.base + R.perLap * state.laps + R.perBeaten * beaten + (R.placeBonus[racer.place] or 0)
-			xp = R.xpBase + R.xpPerLap * state.laps + R.xpPerBeaten * beaten + (R.xpPlaceBonus[racer.place] or 0)
+			if #standings == 1 then
+				xp = R.xpSolo
+			else
+				xp = R.xpByPlace[racer.place] or R.xpFinish
+			end
 		else
 			coins, xp = R.dnfCoins, R.dnfXP
 		end
@@ -2947,7 +2983,7 @@ local function awardRewards(standings)
 				data.stats.podiums += 1
 			end
 			DataService.AddCoins(player, coins)
-			DataService.AddXP(player, xp)
+			xpCoins = DataService.AddXP(player, xp)
 			DataService.Push(player)
 		end
 
@@ -2958,6 +2994,7 @@ local function awardRewards(standings)
 			time = racer.finished and racer.finishTime or nil,
 			coins = coins,
 			xp = xp,
+			xpCoins = xpCoins, -- XP converted to coins at the level cap
 			newBest = newBest,
 		})
 	end
@@ -5727,6 +5764,13 @@ function HUD.RefreshData(data)
 	end
 	coinsLabel.Text = Util.formatNumber(data.coins)
 	levelLabel.Text = tostring(data.level)
+	if data.maxLevel and data.level >= data.maxLevel then
+		Util.tween(xpFill, 0.3, { Size = UDim2.fromScale(1, 1) })
+		xpFill.BackgroundColor3 = T.gold
+		xpLabel.Text = "MAX LEVEL"
+		return
+	end
+	xpFill.BackgroundColor3 = T.accent2
 	local frac = math.clamp(data.xp / math.max(data.xpNeeded, 1), 0, 1)
 	Util.tween(xpFill, 0.3, { Size = UDim2.fromScale(frac, 1) })
 	xpLabel.Text = string.format("%s / %s XP", Util.formatNumber(data.xp), Util.formatNumber(data.xpNeeded))
@@ -6320,13 +6364,30 @@ function Results.Show(payload)
 			Size = UDim2.new(0.22, 0, 0, 24),
 			TextColor3 = entry.newBest and T.good or T.accent2,
 		})
-		Util.label(row, string.format("+%d  •  +%d XP", entry.coins, entry.xp), {
+		local capped = (entry.xpCoins or 0) > 0
+		local rewardText = capped and string.format("+%d  •  MAX LV", entry.coins + entry.xpCoins)
+			or string.format("+%d  •  +%d XP", entry.coins, entry.xp)
+		Util.label(row, rewardText, {
 			Position = UDim2.new(0.78, 0, 0, 10),
 			Size = UDim2.new(0.21, 0, 0, 20),
 			TextColor3 = T.gold,
 		})
 		if mine then
-			rewardLabel.Text = string.format("You earned %s coins and %s XP!", Util.formatNumber(entry.coins), Util.formatNumber(entry.xp))
+			if capped then
+				rewardLabel.Text = string.format(
+					"You earned %s coins (+%s from XP at max level)!",
+					Util.formatNumber(entry.coins + entry.xpCoins),
+					Util.formatNumber(entry.xpCoins)
+				)
+			else
+				local placeText = entry.place and (Util.ordinal(entry.place) .. " place") or "DNF"
+				rewardLabel.Text = string.format(
+					"%s: %s coins and %s XP!",
+					placeText,
+					Util.formatNumber(entry.coins),
+					Util.formatNumber(entry.xp)
+				)
+			end
 		end
 	end
 

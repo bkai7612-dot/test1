@@ -78,13 +78,30 @@ function Results.Show(payload)
 			Size = UDim2.new(0.22, 0, 0, 24),
 			TextColor3 = entry.newBest and T.good or T.accent2,
 		})
-		Util.label(row, string.format("+%d  •  +%d XP", entry.coins, entry.xp), {
+		local capped = (entry.xpCoins or 0) > 0
+		local rewardText = capped and string.format("+%d  •  MAX LV", entry.coins + entry.xpCoins)
+			or string.format("+%d  •  +%d XP", entry.coins, entry.xp)
+		Util.label(row, rewardText, {
 			Position = UDim2.new(0.78, 0, 0, 10),
 			Size = UDim2.new(0.21, 0, 0, 20),
 			TextColor3 = T.gold,
 		})
 		if mine then
-			rewardLabel.Text = string.format("You earned %s coins and %s XP!", Util.formatNumber(entry.coins), Util.formatNumber(entry.xp))
+			if capped then
+				rewardLabel.Text = string.format(
+					"You earned %s coins (+%s from XP at max level)!",
+					Util.formatNumber(entry.coins + entry.xpCoins),
+					Util.formatNumber(entry.xpCoins)
+				)
+			else
+				local placeText = entry.place and (Util.ordinal(entry.place) .. " place") or "DNF"
+				rewardLabel.Text = string.format(
+					"%s: %s coins and %s XP!",
+					placeText,
+					Util.formatNumber(entry.coins),
+					Util.formatNumber(entry.xp)
+				)
+			end
 		end
 	end
 

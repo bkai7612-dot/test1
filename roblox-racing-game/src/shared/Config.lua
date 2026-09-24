@@ -27,10 +27,12 @@ Config.Rewards = {
 	perLap = 50,
 	perBeaten = 100, -- per opponent finished ahead of
 	placeBonus = { 200, 120, 60 },
-	xpBase = 60,
-	xpPerLap = 15,
-	xpPerBeaten = 25,
-	xpPlaceBonus = { 80, 50, 30 },
+	-- XP by finishing position when 2+ players race.
+	xpByPlace = { 250, 175, 125 }, -- 1st, 2nd, 3rd
+	xpFinish = 75, -- 4th place and below
+	-- Racing alone always gives 1st place, so it earns a flat amount instead
+	-- of podium XP (stops solo farming, still rewards practising).
+	xpSolo = 100,
 	newBestCoins = 150,
 	dnfCoins = 60,
 	dnfXP = 20,

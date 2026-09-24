@@ -286,6 +286,13 @@ function HUD.RefreshData(data)
 	end
 	coinsLabel.Text = Util.formatNumber(data.coins)
 	levelLabel.Text = tostring(data.level)
+	if data.maxLevel and data.level >= data.maxLevel then
+		Util.tween(xpFill, 0.3, { Size = UDim2.fromScale(1, 1) })
+		xpFill.BackgroundColor3 = T.gold
+		xpLabel.Text = "MAX LEVEL"
+		return
+	end
+	xpFill.BackgroundColor3 = T.accent2
 	local frac = math.clamp(data.xp / math.max(data.xpNeeded, 1), 0, 1)
 	Util.tween(xpFill, 0.3, { Size = UDim2.fromScale(frac, 1) })
 	xpLabel.Text = string.format("%s / %s XP", Util.formatNumber(data.xp), Util.formatNumber(data.xpNeeded))

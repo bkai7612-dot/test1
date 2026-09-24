@@ -14,7 +14,7 @@ plain text files and builds into a place file with [Rojo](https://rojo.space).
 | **Garage** | 3D car preview, stats, buy with coins (or Robux), select a car. |
 | **Upgrades** | Engine, Turbo, Suspension, Brakes, Nitro. 5 levels each, saved per car. |
 | **Customization** | Body paint, accent color (stripes / wing / scoop), rims, underglow (including an animated rainbow glow), paint finish (glossy, matte, metallic, carbon, chrome, neon). Some are unlocked by level or VIP. |
-| **Levels** | XP from every race, level-up coin bonuses, cars and cosmetics unlock by level. |
+| **Levels** | Level cap of 50. XP depends on where you finish: 1st 250, 2nd 175, 3rd 125, 4th and below 75, did not finish 20. A solo race gives a flat 100, so you can't farm 1st place alone. Every level-up pays coins, reaching 50 pays an extra 5,000, and after the cap XP turns into coins (2 XP = 1 coin). Cars and cosmetics unlock by level. |
 | **Robux** | Coin packs, "Instant Max Upgrade" (one stat), "Fully Tuned" (every stat), unlock any car with Robux, VIP game pass (2x coins and exclusive cosmetics), 2x XP game pass. |
 | **Racing** | Round-based: map vote → grid → 3-2-1 countdown → laps with checkpoints → live positions → results and rewards. Handles respawning, cars that flip over, players leaving, and personal-best lap times. |
 | **Extras** | Daily login reward with streaks, promo codes (`LAUNCH`, `REDLINE`, `NITRO`), nitro that refills when you drift, chase camera with speed-based FOV, on-screen controls for mobile, gamepad support, DataStore saving with retries and duplicate-purchase protection. |
