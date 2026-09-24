@@ -1,0 +1,11 @@
+{
+  "name": "redline-rush-smoke-test",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node run.mjs"
+  },
+  "dependencies": {
+    "luau-web": "1.4.0"
+  }
+}
