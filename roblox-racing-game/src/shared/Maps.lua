@@ -361,6 +361,60 @@ Maps.LobbyLighting = {
 	atmosphere = { Density = 0.25, Color = rgb(200, 215, 240), Decay = rgb(140, 170, 220), Haze = 0.8, Glare = 0.3 },
 }
 
+-- Sprint races run on a long point-to-point road (start line to finish
+-- line, no laps) in the same theme, scenery and lighting as the circuit.
+-- The route is generated from the map's seed, so it's identical every time.
+local sprintCache = {}
+function Maps.Sprint(mapId)
+	if sprintCache[mapId] then
+		return sprintCache[mapId]
+	end
+	local base = Maps.List[mapId]
+	local rng = Random.new((base.seed or 1) * 7919 + 17)
+	-- Keep flat maps flat and hilly maps hilly.
+	local minY, maxY = 0, 0
+	for _, p in base.points do
+		minY = math.min(minY, p[2])
+		maxY = math.max(maxY, p[2])
+	end
+	local points = {}
+	local x, y, z = 0, 0, 0
+	local heading = 0 -- radians away from straight ahead (+Z)
+	for i = 1, 16 do
+		table.insert(points, { math.floor(x + 0.5), math.floor(y + 0.5), math.floor(z + 0.5) })
+		local segLen = 300
+		if i > 2 and i < 15 then
+			-- Sweeping bends that never double back on themselves.
+			segLen = rng:NextNumber(380, 480)
+			heading = math.clamp(heading * 0.4 + rng:NextNumber(-0.7, 0.7), -0.75, 0.75)
+			if x > 1100 then
+				heading = -math.abs(heading)
+			elseif x < -1100 then
+				heading = math.abs(heading)
+			end
+		else
+			-- Straight run to the first corner and into the finish.
+			heading *= 0.3
+		end
+		x += math.sin(heading) * segLen
+		z += math.cos(heading) * segLen
+		if maxY > minY then
+			y = math.clamp(y + rng:NextNumber(-14, 14), minY, maxY)
+		end
+	end
+	local sprint = table.clone(base)
+	sprint.id = base.id .. "Sprint"
+	sprint.name = base.name .. " Sprint"
+	sprint.points = points
+	sprint.scale = 1
+	sprint.open = true
+	sprint.laps = 1
+	sprint.seed = (base.seed or 1) + 500
+	sprint.decoCount = math.floor((base.decoCount or 0) * 1.6)
+	sprintCache[mapId] = sprint
+	return sprint
+end
+
 function Maps.Get(id)
 	return Maps.List[id]
 end

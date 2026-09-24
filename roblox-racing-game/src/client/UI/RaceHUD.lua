@@ -239,7 +239,11 @@ function RaceHUD.Update(info)
 	end
 	positionLabel.Text = Util.ordinal(info.position)
 	totalLabel.Text = "/ " .. info.total
-	lapLabel.Text = info.laps == 1 and "SPRINT" or string.format("LAP %d/%d", info.lap, info.laps)
+	if info.progress then
+		lapLabel.Text = string.format("SPRINT  %d%%", math.floor(info.progress * 100))
+	else
+		lapLabel.Text = string.format("LAP %d/%d", info.lap, info.laps)
+	end
 	timeLabel.Text = Util.formatTime(info.elapsed)
 	local typeInfo = RaceTypes.List[info.raceType]
 	if typeInfo then

@@ -39,15 +39,24 @@ local function catmull(p0, p1, p2, p3, t)
 	return 0.5 * ((2 * p1) + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (3 * p1 - p0 - 3 * p2 + p3) * t3)
 end
 
--- Evenly-ish spaced samples along a closed Catmull-Rom loop.
-function TrackBuilder.Sample(points, spacing)
+-- Evenly-ish spaced samples along a Catmull-Rom spline: a closed loop,
+-- or (open = true) a road from the first point to the last.
+function TrackBuilder.Sample(points, spacing, open)
 	local n = #points
 	local out = {}
-	for i = 1, n do
-		local p0 = points[(i - 2) % n + 1]
-		local p1 = points[i]
-		local p2 = points[i % n + 1]
-		local p3 = points[(i + 1) % n + 1]
+	for i = 1, open and n - 1 or n do
+		local p0, p1, p2, p3
+		if open then
+			p0 = points[math.max(i - 1, 1)]
+			p1 = points[i]
+			p2 = points[i + 1]
+			p3 = points[math.min(i + 2, n)]
+		else
+			p0 = points[(i - 2) % n + 1]
+			p1 = points[i]
+			p2 = points[i % n + 1]
+			p3 = points[(i + 1) % n + 1]
+		end
 		local len, prev = 0, p1
 		for s = 1, 20 do
 			local q = catmull(p0, p1, p2, p3, s / 20)
@@ -59,15 +68,22 @@ function TrackBuilder.Sample(points, spacing)
 			table.insert(out, catmull(p0, p1, p2, p3, s / steps))
 		end
 	end
+	if open then
+		table.insert(out, points[n])
+	end
 	return out
 end
 
-local function buildFrames(samples)
+local function buildFrames(samples, open)
 	local n = #samples
 	local frames = table.create(n)
 	for i = 1, n do
-		local a = samples[(i - 2) % n + 1]
-		local b = samples[i % n + 1]
+		local a, b
+		if open then
+			a, b = samples[math.max(i - 1, 1)], samples[math.min(i + 1, n)]
+		else
+			a, b = samples[(i - 2) % n + 1], samples[i % n + 1]
+		end
 		local dir = (b - a).Unit
 		local right = dir:Cross(Vector3.yAxis).Unit
 		local up = right:Cross(dir).Unit
@@ -408,8 +424,9 @@ function TrackBuilder.Build(map, origin)
 		local scale = map.scale or 1
 		table.insert(points, origin + Vector3.new(p[1] * scale, p[2], p[3] * scale))
 	end
-	local samples = TrackBuilder.Sample(points, SAMPLE_SPACING)
-	local frames = buildFrames(samples)
+	local open = map.open == true
+	local samples = TrackBuilder.Sample(points, SAMPLE_SPACING, open)
+	local frames = buildFrames(samples, open)
 	local n = #frames
 	local W = map.width
 
@@ -425,7 +442,11 @@ function TrackBuilder.Build(map, origin)
 	local lanes = math.max(1, math.floor(W / 10 + 0.5))
 	local barrierColor, barrierMat = map.barrier.color, map.barrier.material
 
-	for i = 1, n do
+	-- Open roads: the grid sits before startIndex, the finish is at finishIndex
+	-- and there's a run-off after it.
+	local startIndex = open and 30 or 1
+	local finishIndex = open and n - 30 or 1
+	for i = 1, open and n - 1 or n do
 		local f, g = frames[i], frames[i % n + 1]
 		local a, b = f.pos, g.pos
 		local len = (b - a).Magnitude
@@ -519,10 +540,18 @@ function TrackBuilder.Build(map, origin)
 	end
 
 	-- Checkpoints ----------------------------------------------------------
-	local numCP = math.clamp(n // 14, 8, 40)
+	-- Closed: evenly around the loop, #1 is the start/finish line.
+	-- Open: #1 is the start line, the last one is the finish line.
+	local span = open and (finishIndex - startIndex) or n
+	local numCP = open and math.clamp(span // 14, 8, 80) or math.clamp(n // 14, 8, 40)
 	local checkpoints = {}
 	for k = 0, numCP - 1 do
-		local idx = math.floor(k * n / numCP) + 1
+		local idx
+		if open then
+			idx = startIndex + math.floor(k * span / (numCP - 1) + 0.5)
+		else
+			idx = math.floor(k * n / numCP) + 1
+		end
 		local f = frames[idx]
 		local center = f.pos + f.up * 8
 		local spawnPos = f.pos + f.dir * 8 + f.up * 3
@@ -535,8 +564,7 @@ function TrackBuilder.Build(map, origin)
 	end
 
 	-- Start / finish line ----------------------------------------------------
-	if not map.noGantry then
-		local f = frames[1]
+	local function gantry(f, caption, neonColor)
 		local tiles = math.floor(W / 4)
 		local tileSize = W / tiles
 		for row = 0, 1 do
@@ -569,7 +597,7 @@ function TrackBuilder.Build(map, origin)
 			roadFolder,
 			Vector3.new(W + 10, 0.6, 3.2),
 			beamCF * CFrame.new(0, -2.8, 0),
-			Color3.fromRGB(255, 120, 30),
+			neonColor,
 			Enum.Material.Neon,
 			{ visualOnly = true }
 		)
@@ -586,8 +614,29 @@ function TrackBuilder.Build(map, origin)
 			label.Font = Enum.Font.GothamBlack
 			label.TextScaled = true
 			label.TextColor3 = Color3.new(1, 1, 1)
-			label.Text = string.upper(map.name) .. "  •  START / FINISH"
+			label.Text = caption
 			label.Parent = gui
+		end
+	end
+	if not map.noGantry then
+		if open then
+			gantry(frames[startIndex], string.upper(map.name) .. "  •  START", Color3.fromRGB(60, 210, 110))
+			gantry(frames[finishIndex], "FINISH", Color3.fromRGB(255, 120, 30))
+		else
+			gantry(frames[1], string.upper(map.name) .. "  •  START / FINISH", Color3.fromRGB(255, 120, 30))
+		end
+	end
+	if open then
+		-- Walls across both ends of the road.
+		for _, idx in { 1, n } do
+			local f = frames[idx]
+			newPart(
+				roadFolder,
+				Vector3.new(W + 6, 8, 3),
+				CFrame.lookAt(f.pos, f.pos + f.dir) * CFrame.new(0, 4.5, 0),
+				barrierColor,
+				barrierMat
+			)
 		end
 	end
 
@@ -597,7 +646,7 @@ function TrackBuilder.Build(map, origin)
 	for k = 0, 23 do
 		local row = k // cols
 		local col = k % cols
-		local idx = (1 - (3 + row * 3) - 1) % n + 1
+		local idx = open and math.max(1, startIndex - 3 - row * 3) or (1 - (3 + row * 3) - 1) % n + 1
 		local f = frames[idx]
 		local lateral = (col - (cols - 1) / 2) * (W / (cols + 0.5))
 		local pos = f.pos + f.right * lateral + f.up * 3 - f.dir * (col * 3)
@@ -633,7 +682,7 @@ function TrackBuilder.Build(map, origin)
 				{ transparency = 0.2 }
 			)
 		end
-		if map.theme == "volcano" then
+		if map.theme == "volcano" and not open then
 			-- The volcano itself, in the middle of the ring.
 			local peak = Vector3.new(cx, groundTop, cz)
 			for i = 0, 5 do
@@ -686,8 +735,18 @@ function TrackBuilder.Build(map, origin)
 		end
 		for _ = 1, map.decoCount or 0 do
 			for _ = 1, 8 do
-				local pos = Vector3.new(rng:NextNumber(minX - 260, maxX + 260), groundTop, rng:NextNumber(minZ - 260, maxZ + 260))
-				local insideVolcano = map.theme == "volcano"
+				local pos
+				if open then
+					-- Long roads: scatter scenery along the roadside.
+					local f = frames[rng:NextInteger(1, n)]
+					local side = rng:NextNumber() < 0.5 and -1 or 1
+					local p = f.pos + f.right * side * (W / 2 + rng:NextNumber(25, 260))
+					pos = Vector3.new(p.X, groundTop, p.Z)
+				else
+					pos = Vector3.new(rng:NextNumber(minX - 260, maxX + 260), groundTop, rng:NextNumber(minZ - 260, maxZ + 260))
+				end
+				local insideVolcano = not open
+					and map.theme == "volcano"
 					and (Vector2.new(pos.X, pos.Z) - Vector2.new((minX + maxX) / 2, (minZ + maxZ) / 2)).Magnitude < 170
 				if not insideVolcano and farFromTrack(pos, margin) then
 					theme(sceneryFolder, pos, rng)
@@ -716,6 +775,9 @@ function TrackBuilder.Build(map, origin)
 		grid = grid,
 		killY = minY - 80,
 		spawn = grid[1],
+		open = open,
+		startIndex = startIndex,
+		finishIndex = finishIndex,
 	}
 end
 

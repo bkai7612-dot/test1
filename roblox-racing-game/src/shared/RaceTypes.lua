@@ -14,7 +14,7 @@ RaceTypes.List = {
 	Sprint = {
 		id = "Sprint",
 		name = "Sprint",
-		description = "One flat-out lap. No second chances.",
+		description = "A long point-to-point road. First across the finish line wins.",
 		color = Color3.fromRGB(0, 200, 255),
 	},
 	Elimination = {

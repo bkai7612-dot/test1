@@ -239,8 +239,9 @@ local function driveSession(drivers, maxTicks)
 	local frames = session.track.frames
 	local n = #frames
 	local idx = {}
+	local open = session.track.open
 	for _, d in drivers do
-		idx[d.player] = n - 14
+		idx[d.player] = open and session.track.startIndex - 10 or n - 14
 	end
 	local ticks = 0
 	while ticks < maxTicks and session.phase ~= "Results" and not session.closed do
@@ -248,7 +249,8 @@ local function driveSession(drivers, maxTicks)
 			local model = CarService.Get(d.player)
 			if model and Sessions.Get(d.player) == session then
 				idx[d.player] += d.speed
-				local f = frames[(idx[d.player] - 1) % n + 1]
+				local k = open and math.min(idx[d.player], n) or (idx[d.player] - 1) % n + 1
+				local f = frames[k]
 				local pos = f.pos + f.up * 3
 				model.PrimaryPart.CFrame = CFrame.lookAt(pos, pos + f.dir)
 			end
@@ -310,6 +312,63 @@ end
 req("ExitCar")
 G.run(0.3)
 
+print("== robot visor")
+do
+	local CarBuilder = G.require(Shared.CarBuilder)
+	local m = CarBuilder.Build("Hatch", { eyes = "Robot" }, true)
+	local segs = m.Cosmetics:FindFirstChild("VisorSegments")
+	check(segs ~= nil and #segs:GetChildren() == 11, "visor has 11 scanner segments")
+	local cs = game:GetService("CollectionService")
+	local tagged = false
+	for _, t in cs:GetTagged("RobotVisor") do
+		tagged = tagged or t == segs
+	end
+	check(tagged, "visor segments tagged for the scanner animation")
+	local names = {}
+	for _, p in m.Cosmetics:GetChildren() do
+		names[p.Name] = (names[p.Name] or 0) + 1
+	end
+	check(names.VisorHousing == 1 and names.VisorLens == 1 and names.VisorAntenna == 2 and names.VisorPod == 2, "visor housing, lens, pods and antennas")
+	m:Destroy()
+end
+
+print("== sprint routes")
+for _, mapId in Maps.Order do
+	local sprint = Maps.Sprint(mapId)
+	local pts = {}
+	for _, q in sprint.points do
+		table.insert(pts, Vector3.new(q[1], q[2], q[3]))
+	end
+	local samples = TrackBuilder.Sample(pts, 8, true)
+	local length, maxX, monotone, minR = 0, 0, true, math.huge
+	for k = 2, #samples do
+		length += (samples[k] - samples[k - 1]).Magnitude
+		maxX = math.max(maxX, math.abs(samples[k].X))
+		monotone = monotone and samples[k].Z > samples[k - 1].Z
+	end
+	for k = 3, #samples - 2 do
+		local a, b, c = samples[k - 2], samples[k], samples[k + 2]
+		local ab, bc, ac = (b - a).Magnitude, (c - b).Magnitude, (c - a).Magnitude
+		local s = (ab + bc + ac) / 2
+		local area = math.sqrt(math.max(s * (s - ab) * (s - bc) * (s - ac), 0))
+		if area > 1e-6 then
+			minR = math.min(minR, ab * bc * ac / (4 * area))
+		end
+	end
+	check(
+		length > 5000 and monotone and maxX < 1700 and minR > 60,
+		string.format("%s sprint: %d studs long, max |x| %d, tightest bend r=%d", mapId, length, maxX, minR)
+	)
+end
+do
+	local built = TrackBuilder.Build(Maps.Sprint("Volcano"), Vector3.new(0, 0, 40000))
+	check(built.open and #built.checkpoints >= 8 and #built.grid == 24, "sprint track builds (" .. #built.checkpoints .. " checkpoints)")
+	local lastCP = built.checkpoints[#built.checkpoints].cf.Position
+	local finish = built.frames[built.finishIndex].pos
+	check((lastCP - finish).Magnitude < 12, "last checkpoint is the finish line")
+	built.model:Destroy()
+end
+
 -- Races on all 8 maps (lobby round) ----------------------------------------------------------
 for idx, mapId in Maps.Order do
 	print("== race " .. idx .. ": " .. mapId)
@@ -327,7 +386,8 @@ for idx, mapId in Maps.Order do
 	check(session ~= nil and session.track.model.Parent == workspace.Tracks, "track in Tracks folder")
 	print("   track parts:", session and G.countParts(session.track.model), "laps:", session and session.laps)
 	if wantType == "Sprint" then
-		check(session.laps == 1, "sprint is one lap")
+		check(session.laps == 1 and session.track.open == true, "sprint runs on an open road")
+		check(session.map.name == Maps.List[mapId].name .. " Sprint", "sprint route named after the map")
 	end
 	local model = CarService.Get(player)
 	check(model ~= nil and not model.PrimaryPart.Anchored, "race car released")

@@ -14,7 +14,7 @@ Config.LOBBY_ORIGIN = Vector3.new(0, 0, 0)
 Config.TRACK_ORIGIN = Vector3.new(0, 0, 5000)
 -- Several races can run at once (lobby round, team matches, free drive);
 -- each gets its own copy of a track, this far apart along X.
-Config.TRACK_SLOT_SPACING = 4000
+Config.TRACK_SLOT_SPACING = 6000
 
 -- Race flow timings (seconds)
 Config.INTERMISSION_TIME = 25

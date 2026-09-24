@@ -757,19 +757,104 @@ local function ball(parent, name, diameter, cframe, color, material)
 	return part
 end
 
+-- Robot visor: an armoured housing with a smoked lens, a row of light
+-- segments (animated by the client as a sweeping scanner), a brow plate,
+-- side pods with antennas and a chin vent.
+local VISOR_SEGMENTS = 11
+local function buildRobotVisor(folder, base, anchors, option)
+	local s = anchors.eyeScale
+	local w = anchors.eyeSpacing * 2 + 2.2 * s
+	local h = 0.95 * s
+	local metal = Color3.fromRGB(48, 52, 60)
+	local dark = Color3.fromRGB(18, 20, 24)
+
+	-- Housing with rounded ends.
+	make(folder, "Part", "VisorHousing", Vector3.new(w, h, 0.7), base, metal, Enum.Material.Metal)
+	for _, side in { -1, 1 } do
+		cylinder(
+			folder,
+			"VisorCap",
+			Vector3.new(0.7, h, h),
+			base * CFrame.new(side * w / 2, 0, 0) * CFrame.Angles(0, math.pi / 2, 0),
+			metal,
+			Enum.Material.Metal
+		)
+	end
+	-- Smoked lens across the front.
+	local lens = make(
+		folder,
+		"Part",
+		"VisorLens",
+		Vector3.new(w - 0.2, h * 0.62, 0.12),
+		base * CFrame.new(0, -0.02, -0.38),
+		dark,
+		Enum.Material.Glass
+	)
+	lens.Transparency = 0.25
+	lens.Reflectance = 0.3
+	-- Light segments behind the lens (the client sweeps a bright spot across them).
+	local segments = Instance.new("Folder")
+	segments.Name = "VisorSegments"
+	segments:SetAttribute("VisorColor", option.color)
+	segments.Parent = folder
+	local segW = (w - 0.6) / VISOR_SEGMENTS
+	for i = 1, VISOR_SEGMENTS do
+		local seg = make(
+			segments,
+			"Part",
+			"Segment",
+			Vector3.new(segW * 0.78, h * 0.34, 0.1),
+			base * CFrame.new(-w / 2 + 0.3 + segW * (i - 0.5), -0.02, -0.34),
+			option.color,
+			Enum.Material.Neon
+		)
+		seg:SetAttribute("Index", i)
+	end
+	CollectionService:AddTag(segments, "RobotVisor")
+	-- Angled brow plate and chin vent.
+	make(
+		folder,
+		"Part",
+		"VisorBrow",
+		Vector3.new(w + 0.2, 0.18, 0.9),
+		base * CFrame.new(0, h / 2 + 0.05, -0.1) * CFrame.Angles(math.rad(-12), 0, 0),
+		metal,
+		Enum.Material.Metal
+	)
+	for k = -1, 1 do
+		make(
+			folder,
+			"Part",
+			"VisorVent",
+			Vector3.new(w * 0.18, 0.08, 0.1),
+			base * CFrame.new(k * w * 0.22, -h / 2 + 0.12, -0.36),
+			dark
+		)
+	end
+	-- Side pods with antennas and glowing tips.
+	for _, side in { -1, 1 } do
+		local pod = base * CFrame.new(side * (w / 2 + 0.3), 0, 0.05)
+		make(folder, "Part", "VisorPod", Vector3.new(0.5, h * 0.8, 0.8), pod, dark, Enum.Material.Metal)
+		cylinder(
+			folder,
+			"VisorPodLight",
+			Vector3.new(0.1, h * 0.35, h * 0.35),
+			pod * CFrame.new(side * 0.26, 0, 0),
+			option.color,
+			Enum.Material.Neon
+		)
+		local antennaBase = pod * CFrame.new(0, h * 0.4, 0.1)
+		local antennaCF = antennaBase * CFrame.Angles(0, 0, -side * 0.35) * CFrame.new(0, 0.7 * s, 0)
+		make(folder, "Part", "VisorAntenna", Vector3.new(0.1, 1.4 * s, 0.1), antennaCF, metal, Enum.Material.Metal)
+		ball(folder, "VisorAntennaTip", 0.3 * s, antennaCF * CFrame.new(0, 0.75 * s, 0), option.color, Enum.Material.Neon)
+	end
+end
+
 local function buildEyes(folder, base, anchors, option)
 	local s = anchors.eyeScale
 	local style = option.id
 	if style == "Robot" then
-		make(
-			folder,
-			"Part",
-			"Visor",
-			Vector3.new(anchors.eyeSpacing * 2 + 1.8 * s, 0.55 * s, 0.4),
-			base * CFrame.new(0, 0, -0.3),
-			option.color,
-			Enum.Material.Neon
-		)
+		buildRobotVisor(folder, base, anchors, option)
 		return
 	end
 	local white = Color3.new(1, 1, 1)

@@ -135,6 +135,19 @@ RunService.RenderStepped:Connect(function()
 			model:PivotTo(CFrame.new(center) * CFrame.Angles(0, t * 0.4, 0))
 		end
 	end
+	-- Robot visor: a bright scanner sweeps back and forth across the segments.
+	for _, segments in CollectionService:GetTagged("RobotVisor") do
+		local base = segments:GetAttribute("VisorColor") or Color3.fromRGB(0, 230, 255)
+		local parts = segments:GetChildren()
+		local count = #parts
+		local scan = (math.sin(t * 3.2) + 1) / 2 * (count - 1) + 1
+		for _, part in parts do
+			local d = math.abs((part:GetAttribute("Index") or 1) - scan)
+			local glow = math.clamp(1 - d / 2.5, 0, 1)
+			part.Color = base:Lerp(Color3.new(1, 1, 1), glow * 0.6)
+			part.Transparency = 0.65 - glow * 0.65
+		end
+	end
 	local color = Color3.fromHSV((t * 0.25) % 1, 1, 1)
 	for _, part in CollectionService:GetTagged("RainbowGlow") do
 		part.Color = color

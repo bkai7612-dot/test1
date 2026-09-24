@@ -55,9 +55,10 @@ end
 
 -- opts: mapId, raceType, players, teams (bool), label, onUpdate(session)
 function RaceSession.new(opts)
-	local map = Maps.List[opts.mapId]
 	local players = opts.players or {}
 	local raceType = opts.raceType == "FreeDrive" and "FreeDrive" or RaceTypes.Resolve(opts.raceType, #players)
+	-- Sprints use the map's long point-to-point road instead of the circuit.
+	local map = raceType == "Sprint" and Maps.Sprint(opts.mapId) or Maps.List[opts.mapId]
 	local self = setmetatable({
 		mapId = opts.mapId,
 		map = map,
@@ -228,6 +229,16 @@ end
 function RaceSession:OnCheckpoint(player, racer, cp)
 	racer.cpPassed += 1
 	racer.respawnCF = cp.spawnCF
+	if self.track.open then
+		-- Point-to-point: the last checkpoint is the finish line.
+		if racer.nextCP == #self.track.checkpoints then
+			self:Finish(player, racer)
+		else
+			racer.lap = 1
+			racer.nextCP += 1
+		end
+		return
+	end
 	if racer.nextCP == 1 then
 		if self.raceType == "FreeDrive" then
 			local now = os.clock()
@@ -371,6 +382,10 @@ function RaceSession:SendUpdates(standings)
 				timeLeft = math.max(0, self.deadline - os.clock()),
 				raceType = self.raceType,
 				label = self.label,
+				-- Sprint roads: how far along the road (0..1).
+				progress = self.track.open
+						and (racer.finished and 1 or math.clamp((racer.cpPassed - 1) / (#self.track.checkpoints - 1), 0, 1))
+					or nil,
 				team = racer.team,
 				teamScores = teamScores,
 				standings = board,
