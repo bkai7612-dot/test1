@@ -97,7 +97,7 @@ end
 
 function MobileControls.SetVisible(visible, mode)
 	root.Visible = visible and UserInputService.TouchEnabled
-	exitButton.Visible = mode == "test"
+	exitButton.Visible = mode == "test" or mode == "free"
 end
 
 return MobileControls

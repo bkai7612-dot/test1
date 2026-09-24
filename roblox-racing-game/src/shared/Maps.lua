@@ -1,7 +1,7 @@
 -- Eight race tracks. Tracks are generated at runtime from the control
 -- points below (a closed Catmull-Rom spline), so every map is fully
 -- defined by this data. Points are {x, elevation, z} in studs relative to
--- Config.TRACK_ORIGIN; the start line sits at the first point, heading
+-- the track's origin (scaled by `scale`); the start line sits at the first point, heading
 -- toward the second.
 local Maps = {}
 
@@ -16,6 +16,10 @@ Maps.Order = {
 	"NeonDrift",
 }
 
+-- Every track is 7 lanes wide.
+Maps.LANES = 7
+Maps.LANE_WIDTH = 10
+
 local function rgb(r, g, b)
 	return Color3.fromRGB(r, g, b)
 end
@@ -27,7 +31,8 @@ Maps.List = {
 		description = "A wide, flat superspeedway. Flat out, all the way round.",
 		difficulty = "Easy",
 		laps = 3,
-		width = 48,
+		width = Maps.LANES * Maps.LANE_WIDTH,
+		scale = 1.2, -- control points are multiplied by this
 		seed = 11,
 		theme = "speedway",
 		cardColor = rgb(255, 140, 60),
@@ -35,7 +40,6 @@ Maps.List = {
 		ground = { color = rgb(90, 140, 70), material = Enum.Material.Grass },
 		barrier = { color = rgb(235, 235, 235), material = Enum.Material.Concrete },
 		curbs = true,
-		lamps = false,
 		decoCount = 60,
 		points = {
 			{ -320, 0, -360 },
@@ -66,7 +70,10 @@ Maps.List = {
 		description = "Night-time street circuit through the city blocks with a tricky chicane.",
 		difficulty = "Medium",
 		laps = 3,
-		width = 44,
+		width = Maps.LANES * Maps.LANE_WIDTH,
+		scale = 1.5, -- control points are multiplied by this
+		night = true, -- street lights along both sides
+		lampColor = rgb(255, 214, 150),
 		seed = 22,
 		theme = "city",
 		cardColor = rgb(90, 120, 255),
@@ -74,8 +81,6 @@ Maps.List = {
 		ground = { color = rgb(70, 70, 75), material = Enum.Material.Pavement },
 		barrier = { color = rgb(200, 200, 205), material = Enum.Material.Concrete },
 		curbs = true,
-		lamps = true,
-		lampEvery = 10,
 		decoCount = 140,
 		points = {
 			{ -420, 0, -300 },
@@ -108,7 +113,8 @@ Maps.List = {
 		description = "Sun-baked desert canyon with long climbs and fast sweeping bends.",
 		difficulty = "Medium",
 		laps = 2,
-		width = 44,
+		width = Maps.LANES * Maps.LANE_WIDTH,
+		scale = 1.25, -- control points are multiplied by this
 		seed = 33,
 		theme = "desert",
 		cardColor = rgb(230, 170, 90),
@@ -116,7 +122,6 @@ Maps.List = {
 		ground = { color = rgb(215, 170, 110), material = Enum.Material.Sand },
 		barrier = { color = rgb(170, 90, 50), material = Enum.Material.Sandstone },
 		curbs = true,
-		lamps = false,
 		decoCount = 150,
 		points = {
 			{ -520, 0, -200 },
@@ -146,7 +151,8 @@ Maps.List = {
 		description = "Snowy mountain pass with big elevation changes. Watch the crests!",
 		difficulty = "Hard",
 		laps = 2,
-		width = 42,
+		width = Maps.LANES * Maps.LANE_WIDTH,
+		scale = 1.45, -- control points are multiplied by this
 		seed = 44,
 		theme = "snow",
 		cardColor = rgb(180, 220, 255),
@@ -154,7 +160,6 @@ Maps.List = {
 		ground = { color = rgb(240, 245, 250), material = Enum.Material.Snow },
 		barrier = { color = rgb(200, 40, 40), material = Enum.Material.SmoothPlastic },
 		curbs = true,
-		lamps = false,
 		decoCount = 170,
 		points = {
 			{ 0, 0, -520 },
@@ -185,7 +190,8 @@ Maps.List = {
 		description = "A long flowing seaside highway lined with palm trees. Top-speed heaven.",
 		difficulty = "Easy",
 		laps = 2,
-		width = 46,
+		width = Maps.LANES * Maps.LANE_WIDTH,
+		scale = 1.15, -- control points are multiplied by this
 		seed = 55,
 		theme = "coast",
 		cardColor = rgb(40, 200, 220),
@@ -193,7 +199,6 @@ Maps.List = {
 		ground = { color = rgb(235, 215, 160), material = Enum.Material.Sand },
 		barrier = { color = rgb(240, 240, 240), material = Enum.Material.Concrete },
 		curbs = true,
-		lamps = false,
 		decoCount = 120,
 		sea = true,
 		points = {
@@ -225,7 +230,8 @@ Maps.List = {
 		description = "Twisty forest rally stage on packed dirt under giant trees.",
 		difficulty = "Hard",
 		laps = 2,
-		width = 40,
+		width = Maps.LANES * Maps.LANE_WIDTH,
+		scale = 1.5, -- control points are multiplied by this
 		seed = 66,
 		theme = "forest",
 		cardColor = rgb(80, 170, 70),
@@ -233,7 +239,6 @@ Maps.List = {
 		ground = { color = rgb(60, 110, 45), material = Enum.Material.LeafyGrass },
 		barrier = { color = rgb(110, 80, 50), material = Enum.Material.Wood },
 		curbs = false,
-		lamps = false,
 		decoCount = 200,
 		points = {
 			{ 0, 0, -460 },
@@ -266,7 +271,10 @@ Maps.List = {
 		description = "A climbing ring road around an active volcano. Do NOT fall in the lava.",
 		difficulty = "Hard",
 		laps = 3,
-		width = 42,
+		width = Maps.LANES * Maps.LANE_WIDTH,
+		scale = 1.15, -- control points are multiplied by this
+		night = true, -- street lights along both sides
+		lampColor = rgb(255, 140, 60),
 		seed = 77,
 		theme = "volcano",
 		cardColor = rgb(255, 80, 30),
@@ -274,7 +282,6 @@ Maps.List = {
 		ground = { color = rgb(40, 35, 35), material = Enum.Material.Basalt },
 		barrier = { color = rgb(255, 100, 20), material = Enum.Material.Neon },
 		curbs = true,
-		lamps = false,
 		decoCount = 130,
 		points = {
 			{ 0, 0, -420 },
@@ -303,7 +310,10 @@ Maps.List = {
 		description = "Tight hairpins in a neon-soaked city. Hold the handbrake and slide!",
 		difficulty = "Expert",
 		laps = 3,
-		width = 40,
+		width = Maps.LANES * Maps.LANE_WIDTH,
+		scale = 1.75, -- control points are multiplied by this
+		night = true, -- street lights along both sides
+		lampColor = rgb(0, 230, 255),
 		seed = 88,
 		theme = "neon",
 		cardColor = rgb(255, 40, 200),
@@ -311,8 +321,6 @@ Maps.List = {
 		ground = { color = rgb(15, 15, 22), material = Enum.Material.Slate },
 		barrier = { color = rgb(0, 230, 255), material = Enum.Material.Neon },
 		curbs = false,
-		lamps = true,
-		lampEvery = 14,
 		decoCount = 120,
 		points = {
 			{ -310, 0, -210 },

@@ -57,6 +57,7 @@ local function defaultProfile()
 		lastDaily = 0,
 		dailyStreak = 0,
 		admin = false,
+		items = {}, -- bought cosmetic items, e.g. ["wings:Angel"] = true
 	}
 end
 
@@ -170,6 +171,7 @@ function DataService.View(player)
 		xpNeeded = Levels.XPForLevel(d.level),
 		maxLevel = Levels.MAX,
 		admin = d.admin == true,
+		items = d.items,
 		selectedCar = d.selectedCar,
 		owned = d.owned,
 		upgrades = d.upgrades,

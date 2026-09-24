@@ -811,7 +811,7 @@ for _, name in string.split(
 		.. "TextBox ScrollingFrame ViewportFrame ScreenGui SurfaceGui BillboardGui PointLight SpotLight IntValue "
 		.. "ParticleEmitter SpecialMesh UICorner UIStroke UIScale UIPadding UIListLayout UIGridLayout UIGradient "
 		.. "UITextSizeConstraint UISizeConstraint Sound Atmosphere Fire ProximityPrompt RemoteEvent RemoteFunction "
-		.. "BindableEvent Player PlayerGui Script LocalScript ModuleScript",
+		.. "BindableEvent Player PlayerGui Script LocalScript ModuleScript Trail Attachment",
 	" "
 ) do
 	KNOWN_CLASSES[name] = true
@@ -1073,7 +1073,10 @@ classMethods.DataModel = {
 classMethods.RemoteEvent = {
 	FireClient = function(self, player, ...)
 		assert(player and player.ClassName == "Player", "FireClient needs a player")
-		self.OnClientEvent:Fire(...)
+		-- Only the local test player has a client in this VM.
+		if player == G.localPlayer then
+			self.OnClientEvent:Fire(...)
+		end
 	end,
 	FireAllClients = function(self, ...)
 		self.OnClientEvent:Fire(...)

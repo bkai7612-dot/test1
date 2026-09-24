@@ -104,6 +104,9 @@ function ShopService.Handlers.Customize(player, carId, category, optionId)
 	if not ok then
 		return false, reason
 	end
+	if not Customization.Owns(data, category, option) then
+		return false, string.format("Buy the %s first (%d coins).", option.id, option.price)
+	end
 	DataService.EnsureCar(data, carId)
 	data.custom[carId][category] = optionId
 	DataService.Push(player)
@@ -169,6 +172,34 @@ local function redeemAdminCode(player, data, code)
 	DataService.Push(player)
 	DataService.Save(player)
 	notify(player, "ADMIN ACCESS GRANTED: level 50, every car and every customization unlocked.", "levelup")
+	return true
+end
+
+-- Buy a cosmetic item (wings / eyes / trail) with coins and equip it on
+-- the selected car.
+function ShopService.Handlers.BuyItem(player, category, optionId)
+	local data = DataService.Get(player)
+	if not data or type(category) ~= "string" or type(optionId) ~= "string" then
+		return false, "Invalid item."
+	end
+	if not Customization.ItemCategories[category] then
+		return false, "That can't be bought."
+	end
+	local option = Customization.Find(category, optionId)
+	if not option or not option.price then
+		return false, "Invalid item."
+	end
+	if Customization.Owns(data, category, option) then
+		return false, "You already own this."
+	end
+	if not DataService.SpendCoins(player, option.price) then
+		return false, "Not enough coins."
+	end
+	data.items[Customization.ItemKey(category, optionId)] = true
+	DataService.EnsureCar(data, data.selectedCar)
+	data.custom[data.selectedCar][category] = optionId
+	DataService.Push(player)
+	notify(player, string.format("Bought %s %s! Equipped on your %s.", optionId, category, Cars.List[data.selectedCar].name), "success")
 	return true
 end
 

@@ -4,6 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Maps = require(Shared.Maps)
+local RaceTypes = require(Shared.RaceTypes)
 local Util = require(script.Parent.Util)
 local T = Util.Theme
 
@@ -50,7 +51,21 @@ function Results.Show(payload)
 		end
 	end
 	local map = Maps.List[payload.mapId]
-	subtitle.Text = map and string.upper(map.name) or ""
+	local typeInfo = RaceTypes.List[payload.raceType]
+	local heading = (typeInfo and string.upper(typeInfo.name) .. "  •  " or "") .. (map and string.upper(map.name) or "")
+	subtitle.TextColor3 = T.accent
+	if payload.teams then
+		local winner = Config.Teams[payload.teams.winner]
+		heading = string.format(
+			"%s TEAM WINS  %d - %d  •  %s",
+			winner.name,
+			payload.teams[payload.teams.winner],
+			payload.teams[payload.teams.winner == "Red" and "Blue" or "Red"],
+			payload.label or ""
+		)
+		subtitle.TextColor3 = winner.color
+	end
+	subtitle.Text = heading
 	rewardLabel.Text = ""
 
 	for i, entry in payload.results do
@@ -62,6 +77,13 @@ function Results.Show(payload)
 		})
 		Util.corner(row, 8)
 		local place = entry.place and Util.ordinal(entry.place) or "DNF"
+		if entry.team and Config.Teams[entry.team] then
+			local stripe = Util.frame(row, {
+				Size = UDim2.new(0, 5, 1, 0),
+				BackgroundColor3 = Config.Teams[entry.team].color,
+			})
+			Util.corner(stripe, 3)
+		end
 		Util.label(row, place, {
 			Position = UDim2.new(0, 10, 0, 6),
 			Size = UDim2.new(0, 60, 0, 28),
@@ -73,7 +95,7 @@ function Results.Show(payload)
 			Size = UDim2.new(0.45, 0, 0, 24),
 			TextXAlignment = Enum.TextXAlignment.Left,
 		})
-		Util.label(row, Util.formatTime(entry.time) .. (entry.newBest and "  PB!" or ""), {
+		Util.label(row, entry.eliminated and "ELIMINATED" or (Util.formatTime(entry.time) .. (entry.newBest and "  PB!" or "")), {
 			Position = UDim2.new(0.55, 0, 0, 8),
 			Size = UDim2.new(0.22, 0, 0, 24),
 			TextColor3 = entry.newBest and T.good or T.accent2,

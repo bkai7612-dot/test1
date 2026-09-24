@@ -27,7 +27,7 @@ local function buildRayParams()
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Include
 	local list = {}
-	for _, name in { "Lobby", "ActiveTrack" } do
+	for _, name in { "Lobby", "Tracks" } do
 		local inst = workspace:FindFirstChild(name)
 		if inst then
 			table.insert(list, inst)
@@ -360,7 +360,7 @@ function CarController.Respawn()
 end
 
 function CarController.ExitCar()
-	if active and active.mode == "test" then
+	if active and (active.mode == "test" or active.mode == "free") then
 		State.Request("ExitCar")
 	end
 end
@@ -476,7 +476,7 @@ function CarController.Start(model, mode)
 		end
 		return Enum.ContextActionResult.Sink
 	end, false, Enum.KeyCode.V, Enum.KeyCode.ButtonR3)
-	if mode == "test" then
+	if mode == "test" or mode == "free" then
 		ContextActionService:BindAction("CarExit", function(_, inputState)
 			if inputState == Enum.UserInputState.Begin then
 				CarController.ExitCar()

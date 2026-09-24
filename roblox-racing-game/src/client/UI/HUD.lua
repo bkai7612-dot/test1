@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Maps = require(Shared.Maps)
+local RaceTypes = require(Shared.RaceTypes)
 local Util = require(script.Parent.Util)
 local State = require(script.Parent.Parent.State)
 local Notify = require(script.Parent.Notify)
@@ -16,6 +17,7 @@ local panels = {}
 local openName = nil
 local root, coinsLabel, levelLabel, xpFill, xpLabel, statusLabel, queueButton, driveButton
 local voteFrame, voteButtons = nil, {}
+local typeButtons = {}
 
 ---------------------------------------------------------------------------
 -- Panel management
@@ -134,7 +136,7 @@ function HUD.Init(gui)
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 12, 0.5, 20),
-		Size = UDim2.new(0, 170, 0, 5 * 54),
+		Size = UDim2.new(0, 170, 0, 7 * 54),
 	})
 	autoScale(menu)
 	Util.new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, Parent = menu })
@@ -143,6 +145,8 @@ function HUD.Init(gui)
 		{ "UPGRADES", "Upgrades", Color3.fromRGB(80, 110, 255) },
 		{ "CUSTOMIZE", "Customize", Color3.fromRGB(200, 60, 200) },
 		{ "SHOP", "Shop", T.robux },
+		{ "TEAM RACES", "Teams", Color3.fromRGB(235, 60, 60) },
+		{ "FREE DRIVE", "FreeDrive", Color3.fromRGB(40, 170, 90) },
 		{ "CODES", "Codes", Color3.fromRGB(90, 95, 115) },
 	}
 	for i, item in menuItems do
@@ -209,23 +213,55 @@ function HUD.Init(gui)
 	voteFrame = Util.frame(root, {
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -12, 0.5, 0),
-		Size = UDim2.new(0, 230, 0, 52 + #Maps.Order * 44),
+		Size = UDim2.new(0, 230, 0, 96 + #Maps.Order * 44),
 		BackgroundColor3 = T.bg,
 		BackgroundTransparency = 0.15,
 	})
 	Util.corner(voteFrame, 14)
 	Util.stroke(voteFrame, T.accent2, 1.5, 0.5)
 	autoScale(voteFrame)
-	Util.label(voteFrame, "MAP VOTE", {
+	Util.label(voteFrame, "VOTE: RACE TYPE + MAP", {
 		Size = UDim2.new(1, -20, 0, 26),
 		Position = UDim2.new(0, 10, 0, 10),
 		Font = Enum.Font.GothamBlack,
 		TextColor3 = T.accent2,
 	})
+	for i, typeId in RaceTypes.Order do
+		local info = RaceTypes.List[typeId]
+		local button = Util.button(voteFrame, "", T.panel2, {
+			Position = UDim2.new((i - 1) / 3, i == 1 and 10 or 3, 0, 44),
+			Size = UDim2.new(1 / 3, -13, 0, 38),
+		}, function()
+			local ok, msg = State.Request("VoteType", typeId)
+			if ok then
+				State.myTypeVote = typeId
+				HUD.RefreshVotes()
+				Notify.Show(info.name .. ": " .. info.description, "info")
+			elseif msg then
+				Notify.Show(msg, "error")
+			end
+		end)
+		local stripe = Util.frame(button, {
+			Size = UDim2.new(1, 0, 0, 3),
+			Position = UDim2.new(0, 0, 1, -3),
+			BackgroundColor3 = info.color,
+		})
+		Util.corner(stripe, 2)
+		local name = Util.label(button, string.upper(info.name), {
+			Size = UDim2.new(1, 0, 0.55, 0),
+			Font = Enum.Font.GothamBlack,
+		})
+		local count = Util.label(button, "0", {
+			Size = UDim2.new(1, 0, 0.4, 0),
+			Position = UDim2.new(0, 0, 0.55, 0),
+			TextColor3 = T.gold,
+		})
+		typeButtons[typeId] = { button = button, count = count, name = name }
+	end
 	for i, mapId in Maps.Order do
 		local map = Maps.List[mapId]
 		local button = Util.button(voteFrame, "", T.panel2, {
-			Position = UDim2.new(0, 10, 0, 44 + (i - 1) * 44),
+			Position = UDim2.new(0, 10, 0, 88 + (i - 1) * 44),
 			Size = UDim2.new(1, -20, 0, 38),
 		}, function()
 			local ok, msg = State.Request("Vote", mapId)
@@ -310,9 +346,11 @@ function HUD.RefreshDrive()
 	if not driveButton then
 		return
 	end
-	driveButton.Text = State.driving and "EXIT CAR (F)" or "TEST DRIVE"
+	driveButton.Text = State.driving and (State.driveMode == "free" and "EXIT FREE DRIVE" or "EXIT CAR (F)")
+		or "TEST DRIVE"
 	driveButton.BackgroundColor3 = State.driving and T.bad or T.accent
-	root.Visible = not (State.driving and State.driveMode == "race")
+	-- Racing or free driving: hide the lobby HUD (the race HUD takes over).
+	root.Visible = not (State.driving and (State.driveMode == "race" or State.driveMode == "free"))
 end
 
 function HUD.RefreshStatus()
@@ -321,6 +359,9 @@ function HUD.RefreshStatus()
 		return
 	end
 	local mapName = race.mapId and Maps.List[race.mapId] and Maps.List[race.mapId].name or ""
+	if race.raceType and RaceTypes.List[race.raceType] then
+		mapName = RaceTypes.List[race.raceType].name .. " on " .. mapName
+	end
 	local text
 	if race.phase == "Waiting" then
 		text = "Waiting for racers — turn on the race queue!"
@@ -331,7 +372,7 @@ function HUD.RefreshStatus()
 	elseif race.phase == "Countdown" then
 		text = mapName .. " is starting!"
 	elseif race.phase == "Racing" then
-		text = string.format("Race on %s  •  %d:%02d left", mapName, race.timeLeft // 60, race.timeLeft % 60)
+		text = string.format("%s  •  %d:%02d left", mapName, race.timeLeft // 60, race.timeLeft % 60)
 	elseif race.phase == "Results" then
 		text = "Race finished! Next round soon..."
 	else
@@ -349,6 +390,11 @@ function HUD.RefreshVotes()
 	voteFrame.Visible = open and State.queued
 	if not open then
 		State.myVote = nil
+		State.myTypeVote = nil
+	end
+	for typeId, entry in typeButtons do
+		entry.count.Text = tostring((race.typeVotes or {})[typeId] or 0)
+		entry.button.BackgroundColor3 = State.myTypeVote == typeId and Color3.fromRGB(0, 120, 160) or T.panel2
 	end
 	for mapId, entry in voteButtons do
 		entry.count.Text = tostring((race.votes or {})[mapId] or 0)

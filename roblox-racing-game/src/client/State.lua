@@ -5,12 +5,11 @@ local Remotes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("R
 
 local State = {
 	data = nil, -- profile view from the server
-	race = { phase = "Waiting", timeLeft = 0, votes = {}, participants = {} },
+	race = { phase = "Waiting", timeLeft = 0, votes = {}, typeVotes = {}, teamQueues = {}, freeDrive = {} },
 	queued = true,
 	myVote = nil,
 	driving = false,
 	driveMode = nil, -- "race" | "test"
-	inRace = false,
 }
 
 local listeners = {}

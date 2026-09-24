@@ -6,6 +6,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
+local RaceTypes = require(Shared.RaceTypes)
 local Util = require(script.Parent.Util)
 local T = Util.Theme
 
@@ -15,6 +16,7 @@ local root, raceInfo, countdownLabel, bannerLabel
 local positionLabel, totalLabel, lapLabel, timeLabel
 local standingsFrame, standingRows = nil, {}
 local speedLabel, nitroFill, hints
+local typeLabel, teamBar, redLabel, blueLabel
 local mode = nil
 local localUserId
 
@@ -84,6 +86,33 @@ function RaceHUD.Init(gui, hud, userId)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = T.accent2,
 	})
+
+	-- Race type + team score (top centre) --------------------------------------------
+	typeLabel = Util.label(root, "", {
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 8),
+		Size = UDim2.new(0, 360, 0, 26),
+		Font = Enum.Font.GothamBlack,
+		TextStrokeTransparency = 0.4,
+	})
+	teamBar = Util.frame(root, {
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 38),
+		Size = UDim2.new(0, 300, 0, 34),
+		BackgroundTransparency = 1,
+		Visible = false,
+	})
+	hud.AutoScale(teamBar)
+	local red = Util.frame(teamBar, { Size = UDim2.new(0.5, -3, 1, 0), BackgroundColor3 = Config.Teams.Red.color })
+	Util.corner(red, 8)
+	redLabel = Util.label(red, "RED 0", { Size = UDim2.new(1, -12, 1, -8), Position = UDim2.new(0, 6, 0, 4), Font = Enum.Font.GothamBlack })
+	local blue = Util.frame(teamBar, {
+		Position = UDim2.new(0.5, 3, 0, 0),
+		Size = UDim2.new(0.5, -3, 1, 0),
+		BackgroundColor3 = Config.Teams.Blue.color,
+	})
+	Util.corner(blue, 8)
+	blueLabel = Util.label(blue, "0 BLUE", { Size = UDim2.new(1, -12, 1, -8), Position = UDim2.new(0, 6, 0, 4), Font = Enum.Font.GothamBlack })
 
 	-- Standings (left) -----------------------------------------------------------------
 	standingsFrame = Util.frame(root, {
@@ -156,9 +185,17 @@ function RaceHUD.Show(newMode)
 	local racing = mode == "race"
 	raceInfo.Visible = racing
 	standingsFrame.Visible = racing
+	teamBar.Visible = false
 	hints.Visible = not UserInputService.TouchEnabled
-	hints.Text = racing and "W/S drive • A/D steer • SPACE drift • SHIFT nitro • R respawn • V camera • C look back"
-		or "W/S drive • A/D steer • SPACE drift • SHIFT nitro • R reset • F exit car"
+	if racing then
+		hints.Text = "W/S drive • A/D steer • SPACE drift • SHIFT nitro • R respawn • V camera • C look back"
+	elseif mode == "free" then
+		hints.Text = "FREE DRIVE • W/S drive • A/D steer • SPACE drift • SHIFT nitro • R respawn • F leave"
+	else
+		hints.Text = "W/S drive • A/D steer • SPACE drift • SHIFT nitro • R reset • F exit car"
+	end
+	typeLabel.Text = mode == "free" and "FREE DRIVE" or ""
+	typeLabel.TextColor3 = RaceTypes.List.FreeDrive.color
 	speedLabel.Text = "0"
 end
 
@@ -202,14 +239,32 @@ function RaceHUD.Update(info)
 	end
 	positionLabel.Text = Util.ordinal(info.position)
 	totalLabel.Text = "/ " .. info.total
-	lapLabel.Text = string.format("LAP %d/%d", info.lap, info.laps)
+	lapLabel.Text = info.laps == 1 and "SPRINT" or string.format("LAP %d/%d", info.lap, info.laps)
 	timeLabel.Text = Util.formatTime(info.elapsed)
+	local typeInfo = RaceTypes.List[info.raceType]
+	if typeInfo then
+		typeLabel.Text = string.upper(typeInfo.name) .. (info.label and ("  •  " .. info.label) or "")
+		typeLabel.TextColor3 = typeInfo.color
+	end
+	if info.teamScores then
+		teamBar.Visible = true
+		redLabel.Text = "RED " .. info.teamScores.Red
+		blueLabel.Text = info.teamScores.Blue .. " BLUE"
+	else
+		teamBar.Visible = false
+	end
 	for i, row in standingRows do
 		local entry = info.standings[i]
 		if entry then
-			local suffix = entry.finished and "  FIN" or (entry.dnf and "  DNF" or "")
+			local suffix = entry.finished and "  FIN" or entry.eliminated and "  OUT" or (entry.dnf and "  DNF" or "")
 			row.Text = string.format("%d. %s%s", i, entry.name, suffix)
-			row.TextColor3 = entry.userId == localUserId and T.gold or T.text
+			if entry.userId == localUserId then
+				row.TextColor3 = T.gold
+			elseif entry.team and Config.Teams[entry.team] then
+				row.TextColor3 = Config.Teams[entry.team].color
+			else
+				row.TextColor3 = T.text
+			end
 		else
 			row.Text = ""
 		end
@@ -217,6 +272,16 @@ function RaceHUD.Update(info)
 end
 
 function RaceHUD.OnCheckpoint(info)
+	if info.freeLap then
+		RaceHUD.Banner((info.best and "BEST LAP  " or "LAP  ") .. Util.formatTime(info.freeLap), info.best and T.good or T.accent2, 3)
+		playBeep(1.3)
+		return
+	end
+	if info.eliminated then
+		RaceHUD.Banner("ELIMINATED! You finished " .. Util.ordinal(info.place), T.bad, 4)
+		playBeep(0.7)
+		return
+	end
 	if info.finished then
 		RaceHUD.Banner("FINISHED " .. Util.ordinal(info.place) .. "!  " .. Util.formatTime(info.time), T.gold, 5)
 		playBeep(2)

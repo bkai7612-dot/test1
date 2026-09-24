@@ -12,6 +12,9 @@ Config.STARTING_COINS = 1500
 -- World layout (the lobby and race tracks live far apart)
 Config.LOBBY_ORIGIN = Vector3.new(0, 0, 0)
 Config.TRACK_ORIGIN = Vector3.new(0, 0, 5000)
+-- Several races can run at once (lobby round, team matches, free drive);
+-- each gets its own copy of a track, this far apart along X.
+Config.TRACK_SLOT_SPACING = 4000
 
 -- Race flow timings (seconds)
 Config.INTERMISSION_TIME = 25
@@ -34,9 +37,26 @@ Config.Rewards = {
 	-- of podium XP (stops solo farming, still rewards practising).
 	xpSolo = 100,
 	newBestCoins = 150,
+	-- Team matches: every member of the winning team also gets this.
+	teamWinCoins = 250,
+	teamWinXP = 100,
 	dnfCoins = 60,
 	dnfXP = 20,
 }
+
+-- Team matches (1v1 up to 5v5) from the Team Arena in the lobby.
+Config.TeamSizes = { 1, 2, 3, 4, 5 }
+Config.Teams = {
+	Red = { name = "RED", color = Color3.fromRGB(235, 60, 60) },
+	Blue = { name = "BLUE", color = Color3.fromRGB(60, 140, 255) },
+}
+-- Points by finishing position; the team with the most points wins.
+Config.TeamPoints = { 25, 18, 15, 12, 10, 8, 6, 4, 2, 1 }
+-- Seconds between a team queue filling up and the match loading.
+Config.MATCH_START_DELAY = 4
+
+-- Free drive tracks are removed this many seconds after the last driver leaves.
+Config.FREE_DRIVE_EMPTY_GRACE = 10
 
 -- Daily login reward: base + perStreakDay * min(streak, maxStreak)
 Config.Daily = {

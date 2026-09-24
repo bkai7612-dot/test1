@@ -228,59 +228,220 @@ game.ReplicatedStorage.Remotes.Checkpoint.OnClientEvent:Connect(function(info)
 	end
 end)
 
+local Sessions = G.require(roots.server.Sessions)
+local RaceService = G.require(roots.server.RaceService)
+local MatchService = G.require(roots.server.MatchService)
+local Customization = G.require(Shared.Customization)
+
+-- Moves each driver's car along its session's track. speed = track samples per tick.
+local function driveSession(drivers, maxTicks)
+	local session = Sessions.Get(drivers[1].player)
+	local frames = session.track.frames
+	local n = #frames
+	local idx = {}
+	for _, d in drivers do
+		idx[d.player] = n - 14
+	end
+	local ticks = 0
+	while ticks < maxTicks and session.phase ~= "Results" and not session.closed do
+		for _, d in drivers do
+			local model = CarService.Get(d.player)
+			if model and Sessions.Get(d.player) == session then
+				idx[d.player] += d.speed
+				local f = frames[(idx[d.player] - 1) % n + 1]
+				local pos = f.pos + f.up * 3
+				model.PrimaryPart.CFrame = CFrame.lookAt(pos, pos + f.dir)
+			end
+		end
+		G.advance(0.05)
+		ticks += 1
+	end
+	return ticks, session
+end
+
+local lastPayload
+game.ReplicatedStorage.Remotes.RaceResults.OnClientEvent:Connect(function(payload)
+	lastPayload = payload
+end)
+
+-- Cosmetic items ----------------------------------------------------------------------------
+print("== cosmetics")
+DataService.AddCoins(player, 60000)
+DataService.Push(player)
+G.run(0.2)
+local coinsBeforeItems = State.data.coins
+check(req("Customize", "Hatch", "wings", "Angel") == false, "can't equip unowned wings")
+check(req("BuyItem", "wings", "Angel") == true, "bought Angel wings")
+check(State.data.coins == coinsBeforeItems - 4000, "wings cost 4,000 coins")
+check(State.data.custom.Hatch.wings == "Angel", "wings auto-equipped")
+check(req("BuyItem", "wings", "Angel") == false, "can't buy twice")
+check(req("BuyItem", "eyes", "Lashes") == true, "bought lash eyes")
+check(req("BuyItem", "trail", "Rainbow") == true, "bought rainbow trail")
+check(req("BuyItem", "paint", "Jet Black") == false, "paints aren't shop items")
+check(req("Customize", "Hatch", "wings", "None") == true, "unequip wings")
+check(req("Customize", "Hatch", "wings", "Angel") == true, "re-equip owned wings")
+HUD.OpenPanel("Customize")
+G.run(0.2)
+HUD.CloseAll()
+check(req("TestDrive") == true, "test drive with cosmetics")
+G.run(0.3)
+local cosCar = CarService.Get(player)
+local cos = cosCar and cosCar:FindFirstChild("Cosmetics")
+local wingCount, lashCount = 0, 0
+for _, dsc in cos and cos:GetChildren() or {} do
+	if dsc.Name == "Wing" then
+		wingCount += 1
+	elseif dsc.Name == "Lash" then
+		lashCount += 1
+	end
+end
+check(wingCount == 10 and lashCount == 6, "wings and lashes built (" .. wingCount .. " feathers, " .. lashCount .. " lashes)")
+local trail = cosCar and cosCar.PrimaryPart:FindFirstChild("CosmeticTrail")
+check(trail ~= nil and trail.FaceCamera == false, "flat rainbow trail attached")
+check(trail ~= nil and trail.Attachment0.Position.Y < -1.5, "trail sits low near the road")
+for _, eyeStyle in Customization.Options.eyes do
+	for _, carId in Cars.Order do
+		local CarBuilder = G.require(Shared.CarBuilder)
+		local m = CarBuilder.Build(carId, { eyes = eyeStyle.id, wings = "Dragon", trail = "Fire" }, true)
+		check(m:FindFirstChild("Cosmetics") ~= nil, "cosmetics build: " .. carId .. " / " .. eyeStyle.id)
+		m:Destroy()
+	end
+end
+req("ExitCar")
+G.run(0.3)
+
+-- Races on all 8 maps (lobby round) ----------------------------------------------------------
 for idx, mapId in Maps.Order do
 	print("== race " .. idx .. ": " .. mapId)
 	waitFor(function()
 		return State.race.phase == "Intermission"
 	end, 40, "intermission reached")
 	check(req("Vote", mapId) == true, "voted " .. mapId)
+	local wantType = idx == 1 and "Sprint" or "Circuit"
+	check(req("VoteType", wantType) == true, "voted " .. wantType)
 	waitFor(function()
 		return State.race.phase == "Racing"
 	end, 60, "race started")
-	check(State.race.mapId == mapId, "voted map chosen")
-	local track = workspace:FindFirstChild("ActiveTrack")
-	print("   track parts:", track and G.countParts(track))
-
+	check(State.race.mapId == mapId and State.race.raceType == wantType, "voted map + type chosen")
+	local session = Sessions.Get(player)
+	check(session ~= nil and session.track.model.Parent == workspace.Tracks, "track in Tracks folder")
+	print("   track parts:", session and G.countParts(session.track.model), "laps:", session and session.laps)
+	if wantType == "Sprint" then
+		check(session.laps == 1, "sprint is one lap")
+	end
 	local model = CarService.Get(player)
 	check(model ~= nil and not model.PrimaryPart.Anchored, "race car released")
-	local chassis = model.PrimaryPart
-	local pts = {}
-	for _, q in Maps.List[mapId].points do
-		table.insert(pts, Config.TRACK_ORIGIN + Vector3.new(q[1], q[2], q[3]))
-	end
-	local samples = TrackBuilder.Sample(pts, 8)
-	local frames = {}
-	for k = 1, #samples do
-		local a, b = samples[(k - 2) % #samples + 1], samples[k % #samples + 1]
-		local dir = (b - a).Unit
-		local right = dir:Cross(Vector3.yAxis).Unit
-		frames[k] = { pos = samples[k], dir = dir, up = right:Cross(dir).Unit }
-	end
-	local n = #frames
 	finishInfo = nil
-	local i = n - 10
-	local steps = 0
-	while not finishInfo and steps < n * (Maps.List[mapId].laps + 1) + 50 do
-		local f = frames[(i - 1) % n + 1]
-		local p = f.pos + f.up * 3
-		chassis.CFrame = CFrame.lookAt(p, p + f.dir)
-		G.advance(0.05)
-		i += 1
-		steps += 1
-	end
-	check(finishInfo ~= nil and finishInfo.place == 1, "finished 1st in " .. steps .. " steps")
-	waitFor(function()
-		return State.race.phase == "Results"
-	end, 10, "results phase")
+	local ticks = driveSession({ { player = player, speed = 1 } }, 5000)
+	check(finishInfo ~= nil and finishInfo.place == 1, "finished 1st (" .. ticks .. " ticks)")
 	waitFor(function()
 		return State.race.phase == "Intermission" or State.race.phase == "Waiting"
 	end, 30, "back to lobby")
-	check(workspace:FindFirstChild("ActiveTrack") == nil, "track cleaned up")
+	check(#workspace.Tracks:GetChildren() == 0, "track cleaned up")
 	check(State.data.stats.races == idx, "race counted (" .. State.data.stats.races .. ")")
 	print("   coins/level/xp:", State.data.coins, State.data.level, State.data.xp)
-	check(State.data.bestTimes[mapId] ~= nil, "best time recorded")
+	local bestKey = mapId .. (wantType == "Sprint" and ":Sprint" or "")
+	check(State.data.bestTimes[bestKey] ~= nil, "best time recorded")
 	check(lastResult ~= nil and lastResult.xp == Config.Rewards.xpSolo, "solo race gives flat solo XP")
 end
+
+-- More players (server-only bots) -------------------------------------------------------------
+local bot2 = G.makePlayer("Bot2", 2)
+game.Players.PlayerAdded:Fire(bot2)
+bot2:LoadCharacter()
+local bot3 = G.makePlayer("Bot3", 3)
+game.Players.PlayerAdded:Fire(bot3)
+bot3:LoadCharacter()
+G.run(1)
+
+print("== elimination race (3 racers)")
+waitFor(function()
+	return State.race.phase == "Intermission"
+end, 60, "intermission reached")
+req("Vote", "Volcano")
+req("VoteType", "Elimination")
+waitFor(function()
+	return State.race.phase == "Racing"
+end, 60, "elimination started")
+local elimSession = Sessions.Get(player)
+check(elimSession ~= nil and elimSession.raceType == "Elimination" and elimSession.laps == 2, "elimination: 3 racers -> 2 laps")
+lastPayload = nil
+driveSession({
+	{ player = player, speed = 3 },
+	{ player = bot2, speed = 2 },
+	{ player = bot3, speed = 1 },
+}, 4000)
+waitFor(function()
+	return lastPayload ~= nil
+end, 15, "elimination results")
+local byId = {}
+for _, entry in lastPayload and lastPayload.results or {} do
+	byId[entry.userId] = entry
+end
+check(byId[1] and byId[1].place == 1, "leader won the elimination")
+check(byId[3] and byId[3].eliminated and byId[3].place == 3, "last place was eliminated in 3rd")
+check(byId[2] and byId[2].place == 2, "runner-up 2nd")
+RaceService.SetQueued(bot2, false)
+RaceService.SetQueued(bot3, false)
+waitFor(function()
+	return State.race.phase == "Intermission" or State.race.phase == "Waiting"
+end, 30, "back to lobby")
+
+print("== team match 1v1")
+check(req("JoinTeamQueue", 1) == true, "joined 1v1 queue")
+G.run(0.2)
+check(State.race.teamQueues[1].count == 1, "queue count broadcast")
+check(MatchService.Join(bot2, 1) == true, "bot joined 1v1 queue")
+waitFor(function()
+	local s = Sessions.Get(player)
+	return s ~= nil and s.teams and s.phase == "Racing"
+end, 30, "1v1 match racing")
+local teamSession = Sessions.Get(player)
+check(teamSession.label == "1v1", "match labelled 1v1")
+check(teamSession.racers[player].team ~= teamSession.racers[bot2].team, "players on opposite teams")
+lastPayload = nil
+driveSession({ { player = player, speed = 3 }, { player = bot2, speed = 1 } }, 6000)
+waitFor(function()
+	return lastPayload ~= nil
+end, 40, "team results")
+local myTeam = teamSession.racers[player] and teamSession.racers[player].team
+check(lastPayload and lastPayload.teams and lastPayload.teams.winner ~= nil, "team scores in results")
+check(lastPayload and lastPayload.teams.winner == myTeam, "winning team is the 1st-place racer's")
+local mine
+for _, entry in lastPayload and lastPayload.results or {} do
+	if entry.userId == 1 then
+		mine = entry
+	end
+end
+check(mine and mine.teamWin == true, "team-win bonus flagged")
+waitFor(function()
+	return Sessions.Get(player) == nil
+end, 30, "match cleaned up")
+
+print("== free drive")
+check(req("FreeDrive", "NeonDrift") == true, "free drive started")
+local free = Sessions.Get(player)
+check(free ~= nil and free.raceType == "FreeDrive", "in free drive session")
+local _, freeMode = CarService.Get(player)
+check(freeMode == "free", "car in free mode")
+check(CarController.IsActive(), "controller active in free drive")
+local lapInfo
+local lapConn = game.ReplicatedStorage.Remotes.Checkpoint.OnClientEvent:Connect(function(info)
+	if info.freeLap then
+		lapInfo = info
+	end
+end)
+driveSession({ { player = player, speed = 2 } }, math.floor(#free.track.frames * 1.2 / 2))
+check(lapInfo ~= nil and lapInfo.freeLap > 0, "free-drive lap time reported")
+lapConn:Disconnect()
+check(State.race.freeDrive.NeonDrift == 1, "free drive count broadcast")
+check(req("JoinTeamQueue", 2) == true, "can queue for teams while free driving")
+req("LeaveTeamQueue")
+check(req("ExitCar") == true, "left free drive")
+G.run(0.5)
+check(Sessions.Get(player) == nil and CarService.Get(player) == nil, "free drive session left")
+G.run(Config.FREE_DRIVE_EMPTY_GRACE + 3)
+check(free.closed == true, "empty free-drive track removed")
 
 -- DNF path: join a race and leave the car mid-race ------------------------------------
 print("== reseat + death")

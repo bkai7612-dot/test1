@@ -296,6 +296,41 @@ function Deco.lamp(parent, pos, facing, neonColor)
 	light.Parent = head
 end
 
+function Deco.streetLight(parent, base, inward, color)
+	color = color or rgb(255, 220, 160)
+	local poleH = 26
+	local metal = rgb(55, 58, 64)
+	newPart(parent, Vector3.new(1.2, poleH, 1.2), CFrame.new(base + Vector3.new(0, poleH / 2, 0)), metal, Enum.Material.Metal)
+	newPart(parent, Vector3.new(2.4, 1, 2.4), CFrame.new(base + Vector3.new(0, 0.5, 0)), metal, Enum.Material.Metal)
+	local top = base + Vector3.new(0, poleH, 0)
+	local flatIn = Vector3.new(inward.X, 0, inward.Z).Unit
+	newPart(
+		parent,
+		Vector3.new(0.7, 0.7, 14),
+		CFrame.lookAt(top, top + flatIn) * CFrame.new(0, 0, -7),
+		metal,
+		Enum.Material.Metal,
+		{ visualOnly = true }
+	)
+	local headPos = top + flatIn * 13 - Vector3.new(0, 0.6, 0)
+	local head = newPart(
+		parent,
+		Vector3.new(3, 0.5, 5),
+		CFrame.lookAt(headPos, headPos + flatIn),
+		color,
+		Enum.Material.Neon,
+		{ visualOnly = true }
+	)
+	local light = Instance.new("SpotLight")
+	light.Face = Enum.NormalId.Bottom
+	light.Angle = 120
+	light.Range = 60
+	light.Brightness = 4
+	light.Color = color
+	light.Shadows = false
+	light.Parent = head
+end
+
 local THEMES = {}
 
 function THEMES.speedway(parent, pos, rng)
@@ -370,7 +405,8 @@ function TrackBuilder.Build(map, origin)
 
 	local points = {}
 	for _, p in map.points do
-		table.insert(points, origin + Vector3.new(p[1], p[2], p[3]))
+		local scale = map.scale or 1
+		table.insert(points, origin + Vector3.new(p[1] * scale, p[2], p[3] * scale))
 	end
 	local samples = TrackBuilder.Sample(points, SAMPLE_SPACING)
 	local frames = buildFrames(samples)
@@ -386,6 +422,7 @@ function TrackBuilder.Build(map, origin)
 	local groundTop = minY - 0.6
 
 	local roadColor, roadMat = map.road.color, map.road.material
+	local lanes = math.max(1, math.floor(W / 10 + 0.5))
 	local barrierColor, barrierMat = map.barrier.color, map.barrier.material
 
 	for i = 1, n do
@@ -406,15 +443,19 @@ function TrackBuilder.Build(map, origin)
 			{ shape = Enum.PartType.Cylinder }
 		)
 
+		-- Dashed lane dividers.
 		if i % 3 == 0 then
-			newPart(
-				roadFolder,
-				Vector3.new(0.6, 0.1, len * 0.6),
-				segCF * CFrame.new(0, 0.52, 0),
-				Color3.fromRGB(235, 235, 235),
-				Enum.Material.SmoothPlastic,
-				{ visualOnly = true }
-			)
+			local laneWidth = W / lanes
+			for lane = 1, lanes - 1 do
+				newPart(
+					roadFolder,
+					Vector3.new(0.5, 0.1, len * 0.6),
+					segCF * CFrame.new(-W / 2 + lane * laneWidth, 0.52, 0),
+					Color3.fromRGB(235, 235, 235),
+					Enum.Material.SmoothPlastic,
+					{ visualOnly = true }
+				)
+			end
 		end
 
 		for _, side in { -1, 1 } do
@@ -463,7 +504,12 @@ function TrackBuilder.Build(map, origin)
 			)
 		end
 
-		if map.lamps and i % (map.lampEvery or 12) == 0 then
+		-- Night tracks: street lights on alternating sides, arms reaching over the road.
+		if map.night and i % 10 == 0 then
+			local side = (i // 10) % 2 == 0 and 1 or -1
+			local base = a + f.right * side * (W / 2 + 4) - f.up * 0.5
+			Deco.streetLight(sceneryFolder, base, -f.right * side, map.lampColor)
+		elseif map.lamps and i % (map.lampEvery or 12) == 0 then
 			local side = (i // (map.lampEvery or 12)) % 2 == 0 and 1 or -1
 			local base = a + f.right * side * (W / 2 + 5) - Vector3.new(0, 0.5, 0)
 			local neon = map.theme == "neon"
@@ -545,30 +591,38 @@ function TrackBuilder.Build(map, origin)
 		end
 	end
 
-	-- Starting grid (two columns, staggered) ----------------------------------
+	-- Starting grid (up to 4 across, staggered) --------------------------------
 	local grid = {}
+	local cols = math.clamp(lanes // 2 + 1, 2, 4)
 	for k = 0, 23 do
-		local row = k // 2
-		local col = k % 2
+		local row = k // cols
+		local col = k % cols
 		local idx = (1 - (3 + row * 3) - 1) % n + 1
 		local f = frames[idx]
-		local lateral = (col == 0 and -1 or 1) * W / 4
-		local pos = f.pos + f.right * lateral + f.up * 3 - f.dir * (col * 6)
+		local lateral = (col - (cols - 1) / 2) * (W / (cols + 0.5))
+		local pos = f.pos + f.right * lateral + f.up * 3 - f.dir * (col * 3)
 		grid[k + 1] = CFrame.lookAt(pos, pos + f.dir)
 	end
 
 	-- Ground, sea ----------------------------------------------------------------
 	if not map.noGround then
 		local cx, cz = (minX + maxX) / 2, (minZ + maxZ) / 2
-		local sx = math.min(2048, (maxX - minX) + 700)
-		local sz = math.min(2048, (maxZ - minZ) + 700)
-		newPart(
-			model,
-			Vector3.new(sx, 4, sz),
-			CFrame.new(cx, groundTop - 2, cz),
-			map.ground.color,
-			map.ground.material
-		)
+		local sx = (maxX - minX) + 700
+		local sz = (maxZ - minZ) + 700
+		-- Parts max out at 2048 studs, so big tracks get a grid of ground tiles.
+		local tilesX, tilesZ = math.ceil(sx / 2000), math.ceil(sz / 2000)
+		local tileX, tileZ = sx / tilesX, sz / tilesZ
+		for tx = 0, tilesX - 1 do
+			for tz = 0, tilesZ - 1 do
+				newPart(
+					model,
+					Vector3.new(tileX + 0.1, 4, tileZ + 0.1),
+					CFrame.new(cx - sx / 2 + tileX * (tx + 0.5), groundTop - 2, cz - sz / 2 + tileZ * (tz + 0.5)),
+					map.ground.color,
+					map.ground.material
+				)
+			end
+		end
 		if map.sea then
 			newPart(
 				model,

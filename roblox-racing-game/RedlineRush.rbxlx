@@ -226,6 +226,7 @@ function CarBuilder.Build(carId, custom, display)
 	local model = Instance.new("Model")
 	model.Name = car.name
 	model:SetAttribute("CarId", car.id)
+	model:SetAttribute("Display", display == true)
 
 	local L, W, H, bottom = b.length, b.width, b.height, b.bottom
 	local h1 = H - b.noseDrop
@@ -717,8 +718,207 @@ function CarBuilder.Build(carId, custom, display)
 	return model
 end
 
+---------------------------------------------------------------------------
+-- Cosmetic items: eyes, wings, trails
+---------------------------------------------------------------------------
+local WING_STYLES = {
+	Angel = { feathers = 5, len = 3.4, grow = 0.6, width = 1.1, angle0 = 18, step = 9 },
+	Bat = { feathers = 4, len = 4.6, grow = 0.2, width = 0.9, angle0 = 6, step = 13 },
+	Butterfly = { feathers = 2, len = 3.8, grow = -0.6, width = 2.6, angle0 = 35, step = -25, material = Enum.Material.Neon },
+	Dragon = { feathers = 4, len = 5.2, grow = 0.4, width = 1.2, angle0 = 12, step = 12 },
+	Jet = { feathers = 1, len = 5.5, grow = 0, width = 2.6, angle0 = 4, step = 0, material = Enum.Material.Metal },
+}
+
+local RAINBOW = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 50, 50)),
+	ColorSequenceKeypoint.new(0.2, Color3.fromRGB(255, 160, 30)),
+	ColorSequenceKeypoint.new(0.4, Color3.fromRGB(255, 240, 40)),
+	ColorSequenceKeypoint.new(0.6, Color3.fromRGB(50, 220, 80)),
+	ColorSequenceKeypoint.new(0.8, Color3.fromRGB(40, 140, 255)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(170, 60, 255)),
+})
+
+-- Where cosmetics attach, in car space.
+local function cosmeticAnchors(car)
+	local b = car.body
+	if b.style == "burger" then
+		return {
+			eyes = Vector3.new(0, 4.9, -4.6),
+			eyeSpacing = 1.8,
+			eyeScale = 1.15,
+			wing = Vector3.new(6.2, 2.6, 0),
+			trailX = 2.6,
+			trailZ = b.length / 2,
+		}
+	end
+	local h1 = b.height - b.noseDrop
+	return {
+		-- Eyes sit on the very front of the nose, like big headlights.
+		eyes = Vector3.new(0, b.bottom + h1 + 0.55, -b.length / 2 + 1.2),
+		eyeSpacing = b.width * 0.22,
+		eyeScale = 1,
+		wing = Vector3.new(b.width / 2 - 0.2, b.bottom + b.height + 0.1, b.cabin.z),
+		trailX = b.width * 0.3,
+		trailZ = b.length / 2,
+	}
+end
+
+local function ball(parent, name, diameter, cframe, color, material)
+	local part = make(parent, "Part", name, Vector3.new(diameter, diameter, diameter), cframe, color, material)
+	part.Shape = Enum.PartType.Ball
+	return part
+end
+
+local function buildEyes(folder, base, anchors, option)
+	local s = anchors.eyeScale
+	local style = option.id
+	if style == "Robot" then
+		make(
+			folder,
+			"Part",
+			"Visor",
+			Vector3.new(anchors.eyeSpacing * 2 + 1.8 * s, 0.55 * s, 0.4),
+			base * CFrame.new(0, 0, -0.3),
+			option.color,
+			Enum.Material.Neon
+		)
+		return
+	end
+	local white = Color3.new(1, 1, 1)
+	local black = Color3.fromRGB(15, 15, 18)
+	local size = (style == "Cute" and 1.9 or 1.6) * s
+	for _, side in { -1, 1 } do
+		local center = base * CFrame.new(side * anchors.eyeSpacing, 0, 0)
+		ball(folder, "Eye", size, center, white)
+		if style == "Love" then
+			ball(folder, "Pupil", size * 0.55, center * CFrame.new(0, 0, -size * 0.34), option.color, Enum.Material.Neon)
+		else
+			ball(folder, "Pupil", size * 0.48, center * CFrame.new(0, -0.05, -size * 0.36), black)
+		end
+		if style == "Cute" then
+			ball(folder, "Shine", size * 0.15, center * CFrame.new(size * 0.12, size * 0.16, -size * 0.5), white, Enum.Material.Neon)
+		elseif style == "Angry" then
+			make(
+				folder,
+				"Part",
+				"Brow",
+				Vector3.new(size * 1.05, 0.3, 0.35),
+				center * CFrame.new(0, size * 0.58, -size * 0.25) * CFrame.Angles(0, 0, side * 0.4),
+				black
+			)
+		elseif style == "Lashes" then
+			for k = -1, 1 do
+				make(
+					folder,
+					"Part",
+					"Lash",
+					Vector3.new(0.12, size * 0.45, 0.12),
+					center * CFrame.new(k * size * 0.28, size * 0.55, -size * 0.2) * CFrame.Angles(0, 0, -k * 0.5),
+					black
+				)
+			end
+		end
+	end
+end
+
+local function buildWings(folder, chassisCF, anchors, option)
+	local st = WING_STYLES[option.id]
+	if not st then
+		return
+	end
+	for _, side in { -1, 1 } do
+		for k = 0, st.feathers - 1 do
+			local len = st.len + k * st.grow
+			local angle = math.rad(st.angle0 + k * st.step)
+			local zOff = (k - (st.feathers - 1) / 2) * st.width * 0.85
+			make(
+				folder,
+				"Part",
+				"Wing",
+				Vector3.new(len, 0.18, st.width),
+				chassisCF
+					* CFrame.new(side * anchors.wing.X, anchors.wing.Y, anchors.wing.Z + zOff)
+					* CFrame.Angles(0, 0, side * angle)
+					* CFrame.new(side * len / 2, 0, 0),
+				option.color,
+				st.material
+			)
+		end
+	end
+end
+
+local function buildTrail(chassis, anchors, option)
+	local a0 = Instance.new("Attachment")
+	a0.Name = "TrailA0"
+	a0.Position = Vector3.new(-anchors.trailX, -2.1, anchors.trailZ)
+	a0.Parent = chassis
+	local a1 = Instance.new("Attachment")
+	a1.Name = "TrailA1"
+	a1.Position = Vector3.new(anchors.trailX, -2.1, anchors.trailZ)
+	a1.Parent = chassis
+	local trail = Instance.new("Trail")
+	trail.Name = "CosmeticTrail"
+	trail.Attachment0 = a0
+	trail.Attachment1 = a1
+	trail.FaceCamera = false -- flat ribbon on the road, never a wall
+	trail.Lifetime = 0.8
+	trail.MinLength = 0.2
+	trail.LightEmission = 0.7
+	trail.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.2),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	trail.Color = option.rainbow and RAINBOW or ColorSequence.new(option.color, option.color2 or option.color)
+	trail.Parent = chassis
+end
+
+function CarBuilder.ApplyCosmetics(model, custom)
+	local chassis = model.PrimaryPart
+	local car = Cars.List[model:GetAttribute("CarId")]
+	if not chassis or not car then
+		return
+	end
+	local old = model:FindFirstChild("Cosmetics")
+	if old then
+		old:Destroy()
+	end
+	for _, name in { "TrailA0", "TrailA1", "CosmeticTrail" } do
+		local inst = chassis:FindFirstChild(name)
+		if inst then
+			inst:Destroy()
+		end
+	end
+
+	local folder = Instance.new("Folder")
+	folder.Name = "Cosmetics"
+	folder.Parent = model
+	local anchors = cosmeticAnchors(car)
+	local chassisCF = chassis.CFrame
+	local eyes = Customization.Find("eyes", custom.eyes)
+	if eyes and eyes.id ~= "None" then
+		buildEyes(folder, chassisCF * CFrame.new(anchors.eyes), anchors, eyes)
+	end
+	local wings = Customization.Find("wings", custom.wings)
+	if wings and wings.id ~= "None" then
+		buildWings(folder, chassisCF, anchors, wings)
+	end
+	local display = model:GetAttribute("Display") == true
+	local trail = Customization.Find("trail", custom.trail)
+	if trail and trail.id ~= "None" and not display then
+		buildTrail(chassis, anchors, trail)
+	end
+	if display then
+		for _, part in folder:GetDescendants() do
+			if part:IsA("BasePart") then
+				part.Anchored = true
+			end
+		end
+	end
+end
+
 function CarBuilder.ApplyCustomization(model, custom)
 	custom = custom or {}
+	CarBuilder.ApplyCosmetics(model, custom)
 	local paint = Customization.Find("paint", custom.paint) or Customization.Options.paint[1]
 	local accent = Customization.Find("accent", custom.accent) or Customization.Find("accent", "Jet Black")
 	local rim = Customization.Find("rim", custom.rim) or Customization.Options.rim[1]
@@ -986,6 +1186,9 @@ Config.STARTING_COINS = 1500
 -- World layout (the lobby and race tracks live far apart)
 Config.LOBBY_ORIGIN = Vector3.new(0, 0, 0)
 Config.TRACK_ORIGIN = Vector3.new(0, 0, 5000)
+-- Several races can run at once (lobby round, team matches, free drive);
+-- each gets its own copy of a track, this far apart along X.
+Config.TRACK_SLOT_SPACING = 4000
 
 -- Race flow timings (seconds)
 Config.INTERMISSION_TIME = 25
@@ -1008,9 +1211,26 @@ Config.Rewards = {
 	-- of podium XP (stops solo farming, still rewards practising).
 	xpSolo = 100,
 	newBestCoins = 150,
+	-- Team matches: every member of the winning team also gets this.
+	teamWinCoins = 250,
+	teamWinXP = 100,
 	dnfCoins = 60,
 	dnfXP = 20,
 }
+
+-- Team matches (1v1 up to 5v5) from the Team Arena in the lobby.
+Config.TeamSizes = { 1, 2, 3, 4, 5 }
+Config.Teams = {
+	Red = { name = "RED", color = Color3.fromRGB(235, 60, 60) },
+	Blue = { name = "BLUE", color = Color3.fromRGB(60, 140, 255) },
+}
+-- Points by finishing position; the team with the most points wins.
+Config.TeamPoints = { 25, 18, 15, 12, 10, 8, 6, 4, 2, 1 }
+-- Seconds between a team queue filling up and the match loading.
+Config.MATCH_START_DELAY = 4
+
+-- Free drive tracks are removed this many seconds after the last driver leaves.
+Config.FREE_DRIVE_EMPTY_GRACE = 10
 
 -- Daily login reward: base + perStreakDay * min(streak, maxStreak)
 Config.Daily = {
@@ -1061,7 +1281,10 @@ local Cars = require(script.Parent.Cars)
 
 local Customization = {}
 
-Customization.Categories = { "paint", "accent", "rim", "glow", "finish" }
+Customization.Categories = { "paint", "accent", "rim", "glow", "finish", "wings", "eyes", "trail" }
+
+-- Cosmetic items bought once with coins, then free to equip on any car.
+Customization.ItemCategories = { wings = true, eyes = true, trail = true }
 
 Customization.CategoryNames = {
 	paint = "Body Paint",
@@ -1069,6 +1292,9 @@ Customization.CategoryNames = {
 	rim = "Rims",
 	glow = "Underglow",
 	finish = "Paint Finish",
+	wings = "Wings (shop item)",
+	eyes = "Eyes (shop item)",
+	trail = "Trail (shop item)",
 }
 
 local paints = {
@@ -1123,13 +1349,63 @@ local finishes = {
 	{ id = "Neon", material = Enum.Material.Neon, reflectance = 0, vip = true },
 }
 
+local wings = {
+	{ id = "None" },
+	{ id = "Angel", price = 4000, color = Color3.fromRGB(245, 245, 250) },
+	{ id = "Bat", price = 4000, color = Color3.fromRGB(35, 30, 40) },
+	{ id = "Butterfly", price = 6000, color = Color3.fromRGB(240, 110, 200) },
+	{ id = "Dragon", price = 7500, color = Color3.fromRGB(170, 25, 25) },
+	{ id = "Jet", price = 9000, color = Color3.fromRGB(150, 155, 165) },
+}
+
+local eyes = {
+	{ id = "None" },
+	{ id = "Cute", price = 1500, color = Color3.fromRGB(255, 255, 255) },
+	{ id = "Angry", price = 2500, color = Color3.fromRGB(255, 90, 60) },
+	{ id = "Lashes", price = 2500, color = Color3.fromRGB(255, 150, 210) },
+	{ id = "Love", price = 4000, color = Color3.fromRGB(255, 60, 150) },
+	{ id = "Robot", price = 6000, color = Color3.fromRGB(0, 230, 255) },
+}
+
+-- Trails are a flat ribbon just above the road behind the car, so they
+-- never block the view of whoever is following.
+local trails = {
+	{ id = "None" },
+	{ id = "Blue Streak", price = 1500, color = Color3.fromRGB(40, 140, 255) },
+	{ id = "Fire", price = 3000, color = Color3.fromRGB(255, 110, 20), color2 = Color3.fromRGB(255, 30, 0) },
+	{ id = "Ice", price = 3000, color = Color3.fromRGB(170, 240, 255), color2 = Color3.fromRGB(40, 150, 255) },
+	{ id = "Toxic", price = 3000, color = Color3.fromRGB(120, 255, 60), color2 = Color3.fromRGB(20, 160, 40) },
+	{ id = "Gold", price = 6000, color = Color3.fromRGB(255, 215, 60), color2 = Color3.fromRGB(255, 160, 20) },
+	{ id = "Rainbow", price = 10000, color = Color3.fromRGB(255, 60, 60), rainbow = true },
+}
+
 Customization.Options = {
 	paint = paints,
 	accent = paints,
 	rim = rims,
 	glow = glows,
 	finish = finishes,
+	wings = wings,
+	eyes = eyes,
+	trail = trails,
 }
+
+-- Key used in the player's saved `items` table.
+function Customization.ItemKey(category, id)
+	return category .. ":" .. id
+end
+
+-- Whether the player may equip this option: free options always, shop
+-- items once bought (admins own everything).
+function Customization.Owns(data, category, option)
+	if not option.price then
+		return true
+	end
+	if data.admin then
+		return true
+	end
+	return data.items ~= nil and data.items[Customization.ItemKey(category, option.id)] == true
+end
 
 function Customization.Find(category, id)
 	local list = Customization.Options[category]
@@ -1162,6 +1438,9 @@ function Customization.Default(carId)
 		rim = "Silver",
 		glow = "None",
 		finish = "Glossy",
+		wings = "None",
+		eyes = "None",
+		trail = "None",
 	}
 	for key, value in (car and car.defaultCustom) or {} do
 		custom[key] = value
@@ -1210,7 +1489,7 @@ return Levels
           <string name="Source"><![CDATA[-- Eight race tracks. Tracks are generated at runtime from the control
 -- points below (a closed Catmull-Rom spline), so every map is fully
 -- defined by this data. Points are {x, elevation, z} in studs relative to
--- Config.TRACK_ORIGIN; the start line sits at the first point, heading
+-- the track's origin (scaled by `scale`); the start line sits at the first point, heading
 -- toward the second.
 local Maps = {}
 
@@ -1225,6 +1504,10 @@ Maps.Order = {
 	"NeonDrift",
 }
 
+-- Every track is 7 lanes wide.
+Maps.LANES = 7
+Maps.LANE_WIDTH = 10
+
 local function rgb(r, g, b)
 	return Color3.fromRGB(r, g, b)
 end
@@ -1236,7 +1519,8 @@ Maps.List = {
 		description = "A wide, flat superspeedway. Flat out, all the way round.",
 		difficulty = "Easy",
 		laps = 3,
-		width = 48,
+		width = Maps.LANES * Maps.LANE_WIDTH,
+		scale = 1.2, -- control points are multiplied by this
 		seed = 11,
 		theme = "speedway",
 		cardColor = rgb(255, 140, 60),
@@ -1244,7 +1528,6 @@ Maps.List = {
 		ground = { color = rgb(90, 140, 70), material = Enum.Material.Grass },
 		barrier = { color = rgb(235, 235, 235), material = Enum.Material.Concrete },
 		curbs = true,
-		lamps = false,
 		decoCount = 60,
 		points = {
 			{ -320, 0, -360 },
@@ -1275,7 +1558,10 @@ Maps.List = {
 		description = "Night-time street circuit through the city blocks with a tricky chicane.",
 		difficulty = "Medium",
 		laps = 3,
-		width = 44,
+		width = Maps.LANES * Maps.LANE_WIDTH,
+		scale = 1.5, -- control points are multiplied by this
+		night = true, -- street lights along both sides
+		lampColor = rgb(255, 214, 150),
 		seed = 22,
 		theme = "city",
 		cardColor = rgb(90, 120, 255),
@@ -1283,8 +1569,6 @@ Maps.List = {
 		ground = { color = rgb(70, 70, 75), material = Enum.Material.Pavement },
 		barrier = { color = rgb(200, 200, 205), material = Enum.Material.Concrete },
 		curbs = true,
-		lamps = true,
-		lampEvery = 10,
 		decoCount = 140,
 		points = {
 			{ -420, 0, -300 },
@@ -1317,7 +1601,8 @@ Maps.List = {
 		description = "Sun-baked desert canyon with long climbs and fast sweeping bends.",
 		difficulty = "Medium",
 		laps = 2,
-		width = 44,
+		width = Maps.LANES * Maps.LANE_WIDTH,
+		scale = 1.25, -- control points are multiplied by this
 		seed = 33,
 		theme = "desert",
 		cardColor = rgb(230, 170, 90),
@@ -1325,7 +1610,6 @@ Maps.List = {
 		ground = { color = rgb(215, 170, 110), material = Enum.Material.Sand },
 		barrier = { color = rgb(170, 90, 50), material = Enum.Material.Sandstone },
 		curbs = true,
-		lamps = false,
 		decoCount = 150,
 		points = {
 			{ -520, 0, -200 },
@@ -1355,7 +1639,8 @@ Maps.List = {
 		description = "Snowy mountain pass with big elevation changes. Watch the crests!",
 		difficulty = "Hard",
 		laps = 2,
-		width = 42,
+		width = Maps.LANES * Maps.LANE_WIDTH,
+		scale = 1.45, -- control points are multiplied by this
 		seed = 44,
 		theme = "snow",
 		cardColor = rgb(180, 220, 255),
@@ -1363,7 +1648,6 @@ Maps.List = {
 		ground = { color = rgb(240, 245, 250), material = Enum.Material.Snow },
 		barrier = { color = rgb(200, 40, 40), material = Enum.Material.SmoothPlastic },
 		curbs = true,
-		lamps = false,
 		decoCount = 170,
 		points = {
 			{ 0, 0, -520 },
@@ -1394,7 +1678,8 @@ Maps.List = {
 		description = "A long flowing seaside highway lined with palm trees. Top-speed heaven.",
 		difficulty = "Easy",
 		laps = 2,
-		width = 46,
+		width = Maps.LANES * Maps.LANE_WIDTH,
+		scale = 1.15, -- control points are multiplied by this
 		seed = 55,
 		theme = "coast",
 		cardColor = rgb(40, 200, 220),
@@ -1402,7 +1687,6 @@ Maps.List = {
 		ground = { color = rgb(235, 215, 160), material = Enum.Material.Sand },
 		barrier = { color = rgb(240, 240, 240), material = Enum.Material.Concrete },
 		curbs = true,
-		lamps = false,
 		decoCount = 120,
 		sea = true,
 		points = {
@@ -1434,7 +1718,8 @@ Maps.List = {
 		description = "Twisty forest rally stage on packed dirt under giant trees.",
 		difficulty = "Hard",
 		laps = 2,
-		width = 40,
+		width = Maps.LANES * Maps.LANE_WIDTH,
+		scale = 1.5, -- control points are multiplied by this
 		seed = 66,
 		theme = "forest",
 		cardColor = rgb(80, 170, 70),
@@ -1442,7 +1727,6 @@ Maps.List = {
 		ground = { color = rgb(60, 110, 45), material = Enum.Material.LeafyGrass },
 		barrier = { color = rgb(110, 80, 50), material = Enum.Material.Wood },
 		curbs = false,
-		lamps = false,
 		decoCount = 200,
 		points = {
 			{ 0, 0, -460 },
@@ -1475,7 +1759,10 @@ Maps.List = {
 		description = "A climbing ring road around an active volcano. Do NOT fall in the lava.",
 		difficulty = "Hard",
 		laps = 3,
-		width = 42,
+		width = Maps.LANES * Maps.LANE_WIDTH,
+		scale = 1.15, -- control points are multiplied by this
+		night = true, -- street lights along both sides
+		lampColor = rgb(255, 140, 60),
 		seed = 77,
 		theme = "volcano",
 		cardColor = rgb(255, 80, 30),
@@ -1483,7 +1770,6 @@ Maps.List = {
 		ground = { color = rgb(40, 35, 35), material = Enum.Material.Basalt },
 		barrier = { color = rgb(255, 100, 20), material = Enum.Material.Neon },
 		curbs = true,
-		lamps = false,
 		decoCount = 130,
 		points = {
 			{ 0, 0, -420 },
@@ -1512,7 +1798,10 @@ Maps.List = {
 		description = "Tight hairpins in a neon-soaked city. Hold the handbrake and slide!",
 		difficulty = "Expert",
 		laps = 3,
-		width = 40,
+		width = Maps.LANES * Maps.LANE_WIDTH,
+		scale = 1.75, -- control points are multiplied by this
+		night = true, -- street lights along both sides
+		lampColor = rgb(0, 230, 255),
 		seed = 88,
 		theme = "neon",
 		cardColor = rgb(255, 40, 200),
@@ -1520,8 +1809,6 @@ Maps.List = {
 		ground = { color = rgb(15, 15, 22), material = Enum.Material.Slate },
 		barrier = { color = rgb(0, 230, 255), material = Enum.Material.Neon },
 		curbs = false,
-		lamps = true,
-		lampEvery = 14,
 		decoCount = 120,
 		points = {
 			{ -310, 0, -210 },
@@ -1639,6 +1926,69 @@ return Products
       </Item>
       <Item class="ModuleScript" referent="9">
         <Properties>
+          <string name="Name">RaceTypes</string>
+          <string name="Source"><![CDATA[-- Race formats. The lobby round votes on one; team matches pick Circuit or
+-- Sprint at random; Free Drive is its own mode with no timer or rewards.
+local RaceTypes = {}
+
+RaceTypes.Order = { "Circuit", "Sprint", "Elimination" }
+
+RaceTypes.List = {
+	Circuit = {
+		id = "Circuit",
+		name = "Circuit",
+		description = "Classic multi-lap race. First across the line wins.",
+		color = Color3.fromRGB(255, 120, 30),
+	},
+	Sprint = {
+		id = "Sprint",
+		name = "Sprint",
+		description = "One flat-out lap. No second chances.",
+		color = Color3.fromRGB(0, 200, 255),
+	},
+	Elimination = {
+		id = "Elimination",
+		name = "Elimination",
+		description = "Last place is knocked out every lap until one racer is left. Needs 3+ racers.",
+		color = Color3.fromRGB(235, 60, 60),
+		minRacers = 3,
+	},
+	FreeDrive = {
+		id = "FreeDrive",
+		name = "Free Drive",
+		description = "Cruise any circuit with no timer, no opponents to beat and no rewards.",
+		color = Color3.fromRGB(60, 210, 110),
+	},
+}
+
+-- Falls back to Circuit when a format can't run with this many racers.
+function RaceTypes.Resolve(typeId, racerCount)
+	local info = RaceTypes.List[typeId]
+	if not info or typeId == "FreeDrive" then
+		return "Circuit"
+	end
+	if info.minRacers and racerCount < info.minRacers then
+		return "Circuit"
+	end
+	return typeId
+end
+
+function RaceTypes.Laps(typeId, map, racerCount)
+	if typeId == "Sprint" then
+		return 1
+	elseif typeId == "Elimination" then
+		-- One knockout per lap until two remain, then a final lap.
+		return math.clamp(racerCount - 1, 2, 6)
+	end
+	return map.laps
+end
+
+return RaceTypes
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="10">
+        <Properties>
           <string name="Name">Remotes</string>
           <string name="Source"><![CDATA[-- Creates (server) or fetches (client) every RemoteEvent / RemoteFunction.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -1701,7 +2051,7 @@ return Remotes
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="10">
+      <Item class="ModuleScript" referent="11">
         <Properties>
           <string name="Name">Upgrades</string>
           <string name="Source"><![CDATA[-- Performance upgrades. Every car tracks its own upgrade levels.
@@ -1761,15 +2111,15 @@ return Upgrades
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="11">
+  <Item class="ServerScriptService" referent="12">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Folder" referent="12">
+    <Item class="Folder" referent="13">
       <Properties>
         <string name="Name">Server</string>
       </Properties>
-      <Item class="ModuleScript" referent="13">
+      <Item class="ModuleScript" referent="14">
         <Properties>
           <string name="Name">AdminCodes</string>
           <string name="Source"><![CDATA[-- Secret admin codes (server only, never replicated to clients).
@@ -1794,7 +2144,7 @@ return {
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="14">
+      <Item class="ModuleScript" referent="15">
         <Properties>
           <string name="Name">CarService</string>
           <string name="Source"><![CDATA[-- Spawns / despawns player cars and seats the driver.
@@ -1807,6 +2157,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local CarBuilder = require(Shared.CarBuilder)
 local Upgrades = require(Shared.Upgrades)
 local Remotes = require(Shared.Remotes)
+local Config = require(Shared.Config)
 
 local DataService = require(script.Parent.DataService)
 
@@ -1852,8 +2203,9 @@ function CarService.Despawn(player)
 	rec.model:Destroy()
 end
 
--- mode: "race" | "test". Anchored cars are frozen (race countdown).
-function CarService.Spawn(player, cframe, mode, anchored, extraAttributes)
+-- mode: "race" | "test" | "free". Anchored cars are frozen (race countdown).
+-- onExit: called when a test / free-drive driver jumps out (default: despawn).
+function CarService.Spawn(player, cframe, mode, anchored, extraAttributes, onExit)
 	CarService.Despawn(player)
 	local data = DataService.Get(player)
 	local character = player.Character
@@ -1887,7 +2239,8 @@ function CarService.Spawn(player, cframe, mode, anchored, extraAttributes)
 	label.BackgroundTransparency = 1
 	label.Font = Enum.Font.GothamBold
 	label.TextScaled = true
-	label.TextColor3 = Color3.new(1, 1, 1)
+	local team = extraAttributes and extraAttributes.Team
+	label.TextColor3 = team and Config.Teams[team].color or Color3.new(1, 1, 1)
 	label.TextStrokeTransparency = 0.4
 	label.Text = player.DisplayName
 	label.Parent = tag
@@ -1916,11 +2269,15 @@ function CarService.Spawn(player, cframe, mode, anchored, extraAttributes)
 			if rec.cleaning or active[player] ~= rec or seat.Occupant ~= nil then
 				return
 			end
-			if mode == "test" then
-				-- Jumped out of a test drive: remove the car.
+			if mode == "test" or mode == "free" then
+				-- Jumped out of a test / free drive: remove the car.
 				task.defer(function()
 					if active[player] == rec then
-						CarService.Despawn(player)
+						if onExit then
+							onExit()
+						else
+							CarService.Despawn(player)
+						end
 					end
 				end)
 			else
@@ -1978,7 +2335,7 @@ return CarService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="15">
+      <Item class="ModuleScript" referent="16">
         <Properties>
           <string name="Name">DataService</string>
           <string name="Source"><![CDATA[-- Player profiles: loading, saving (DataStore), currency, XP / levels,
@@ -2040,6 +2397,7 @@ local function defaultProfile()
 		lastDaily = 0,
 		dailyStreak = 0,
 		admin = false,
+		items = {}, -- bought cosmetic items, e.g. ["wings:Angel"] = true
 	}
 end
 
@@ -2153,6 +2511,7 @@ function DataService.View(player)
 		xpNeeded = Levels.XPForLevel(d.level),
 		maxLevel = Levels.MAX,
 		admin = d.admin == true,
+		items = d.items,
 		selectedCar = d.selectedCar,
 		owned = d.owned,
 		upgrades = d.upgrades,
@@ -2449,7 +2808,101 @@ return DataService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="16">
+      <Item class="ModuleScript" referent="17">
+        <Properties>
+          <string name="Name">FreeDriveService</string>
+          <string name="Source"><![CDATA[-- Free drive: pick any circuit and cruise it with no timer or opponents.
+-- One shared free-drive track per map, opened on demand and removed a few
+-- seconds after the last driver leaves.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Maps = require(Shared.Maps)
+
+local RaceSession = require(script.Parent.RaceSession)
+local Sessions = require(script.Parent.Sessions)
+
+local FreeDriveService = {}
+FreeDriveService.OnChanged = nil -- set by RaceService
+
+local sessions = {} -- [mapId] = RaceSession
+
+local function changed()
+	if FreeDriveService.OnChanged then
+		FreeDriveService.OnChanged()
+	end
+end
+
+function FreeDriveService.Counts()
+	local counts = {}
+	for mapId, session in sessions do
+		counts[mapId] = session:PlayerCount()
+	end
+	return counts
+end
+
+function FreeDriveService.Join(player, mapId)
+	if type(mapId) ~= "string" or not Maps.List[mapId] then
+		return false, "Unknown map."
+	end
+	local current = Sessions.Get(player)
+	if current and current.raceType ~= "FreeDrive" then
+		return false, "You're in a race right now."
+	end
+	if current then
+		if current.mapId == mapId then
+			return false, "You're already driving this circuit."
+		end
+		current:RemovePlayer(player, true)
+	end
+
+	local session = sessions[mapId]
+	if not session or session.closing or session.closed then
+		session = RaceSession.new({ mapId = mapId, raceType = "FreeDrive" })
+		sessions[mapId] = session
+		task.spawn(function()
+			local ok, err = pcall(session.RunFreeDrive, session)
+			if not ok then
+				warn("[FreeDriveService]", err)
+				pcall(session.Cleanup, session)
+			end
+			if sessions[mapId] == session then
+				sessions[mapId] = nil
+			end
+			changed()
+		end)
+	end
+
+	local deadline = os.clock() + 15
+	while not session.track and os.clock() < deadline do
+		task.wait(0.1)
+	end
+	if not session.track or session.closing then
+		return false, "That circuit is still loading. Try again."
+	end
+	local racer = session:AddPlayer(player)
+	changed()
+	if not racer then
+		return false, "Couldn't spawn your car. Try again in a moment."
+	end
+	return true, "Free driving " .. Maps.List[mapId].name .. ". Press F (or EXIT) to leave."
+end
+
+function FreeDriveService.Leave(player)
+	local current = Sessions.Get(player)
+	if current and current.raceType == "FreeDrive" then
+		current:RemovePlayer(player)
+		changed()
+		return true
+	end
+	return false
+end
+
+return FreeDriveService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="18">
         <Properties>
           <string name="Name">LobbyBuilder</string>
           <string name="Source"><![CDATA[-- Builds the lobby: plaza, spawn, car showroom with turntables, status
@@ -2473,6 +2926,7 @@ local LobbyBuilder = {}
 local statusLabel, subStatusLabel
 local leaderboardRows = {}
 local testSpawn
+local teamPadLabels = {}
 
 local function rgb(r, g, b)
 	return Color3.fromRGB(r, g, b)
@@ -2688,6 +3142,101 @@ function LobbyBuilder.Build()
 		end
 	end
 
+	-- Team Arena: queue pads for 1v1 .. 5v5 ----------------------------------------
+	local arenaZ = 86
+	local banner = newPart(
+		lobby,
+		Vector3.new(170, 14, 1),
+		CFrame.new(origin + Vector3.new(0, 9, arenaZ + 18)),
+		rgb(20, 20, 26),
+		Enum.Material.SmoothPlastic
+	)
+	local _, bannerBg = surfaceGui(banner, Enum.NormalId.Front, 10)
+	text(bannerBg, "TEAM ARENA", UDim2.fromScale(0.6, 0.55), UDim2.fromScale(0.2, 0.05), rgb(255, 200, 60))
+	text(
+		bannerBg,
+		"Stand on a pad to queue • Red vs Blue • most points wins",
+		UDim2.fromScale(0.8, 0.28),
+		UDim2.fromScale(0.1, 0.65),
+		rgb(220, 220, 230),
+		Enum.Font.GothamBold
+	)
+	local teamColors = { rgb(235, 60, 60), rgb(60, 140, 255) }
+	for i, size in Config.TeamSizes do
+		local x = (i - (#Config.TeamSizes + 1) / 2) * 32
+		local pad = newPart(
+			lobby,
+			Vector3.new(24, 0.4, 18),
+			CFrame.new(origin + Vector3.new(x, 0.3, arenaZ)),
+			rgb(30, 30, 38),
+			Enum.Material.SmoothPlastic
+		)
+		for side = 1, 2 do
+			newPart(
+				lobby,
+				Vector3.new(11, 0.1, 17),
+				CFrame.new(origin + Vector3.new(x + (side == 1 and -6 or 6), 0.55, arenaZ)),
+				teamColors[side],
+				Enum.Material.Neon,
+				{ visualOnly = true, transparency = 0.35 }
+			)
+		end
+		local board = Instance.new("BillboardGui")
+		board.Size = UDim2.fromOffset(170, 80)
+		board.StudsOffset = Vector3.new(0, 7, 0)
+		board.MaxDistance = 140
+		board.Parent = pad
+		text(board, string.format("%dv%d", size, size), UDim2.new(1, 0, 0.55, 0), UDim2.new(), Color3.new(1, 1, 1))
+		teamPadLabels[size] = text(
+			board,
+			string.format("0 / %d queued", size * 2),
+			UDim2.new(1, 0, 0.35, 0),
+			UDim2.new(0, 0, 0.6, 0),
+			rgb(255, 200, 60),
+			Enum.Font.GothamBold
+		)
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.ActionText = string.format("Join / leave %dv%d queue", size, size)
+		prompt.ObjectText = "Team Arena"
+		prompt.HoldDuration = 0
+		prompt.MaxActivationDistance = 14
+		prompt.RequiresLineOfSight = false
+		prompt:SetAttribute("TeamQueue", size)
+		prompt.Parent = pad
+	end
+
+	-- Free drive kiosk ----------------------------------------------------------------
+	local kiosk = newPart(
+		lobby,
+		Vector3.new(8, 10, 8),
+		CFrame.new(origin + Vector3.new(-80, 5, 50)),
+		rgb(25, 28, 36),
+		Enum.Material.SmoothPlastic
+	)
+	newPart(
+		lobby,
+		Vector3.new(8.4, 1, 8.4),
+		CFrame.new(origin + Vector3.new(-80, 10.5, 50)),
+		rgb(60, 210, 110),
+		Enum.Material.Neon,
+		{ visualOnly = true }
+	)
+	local kioskBoard = Instance.new("BillboardGui")
+	kioskBoard.Size = UDim2.fromOffset(200, 60)
+	kioskBoard.StudsOffset = Vector3.new(0, 9, 0)
+	kioskBoard.MaxDistance = 140
+	kioskBoard.Parent = kiosk
+	text(kioskBoard, "FREE DRIVE", UDim2.new(1, 0, 0.6, 0), UDim2.new(), rgb(60, 210, 110))
+	text(kioskBoard, "Cruise any circuit", UDim2.new(1, 0, 0.35, 0), UDim2.new(0, 0, 0.62, 0), Color3.new(1, 1, 1), Enum.Font.GothamBold)
+	local kioskPrompt = Instance.new("ProximityPrompt")
+	kioskPrompt.ActionText = "Choose a circuit"
+	kioskPrompt.ObjectText = "Free Drive"
+	kioskPrompt.HoldDuration = 0
+	kioskPrompt.MaxActivationDistance = 14
+	kioskPrompt.RequiresLineOfSight = false
+	kioskPrompt:SetAttribute("OpenPanel", "FreeDrive")
+	kioskPrompt.Parent = kiosk
+
 	-- Test-drive ring road -------------------------------------------------------------
 	local ringPoints = {}
 	for i = 0, 11 do
@@ -2749,6 +3298,13 @@ function LobbyBuilder.SetStatus(main, sub)
 	end
 end
 
+function LobbyBuilder.SetTeamPad(size, count, needed)
+	local label = teamPadLabels[size]
+	if label then
+		label.Text = string.format("%d / %d queued", count, needed)
+	end
+end
+
 function LobbyBuilder.SetLeaderboard(entries)
 	for i, row in leaderboardRows do
 		local entry = entries[i]
@@ -2760,7 +3316,7 @@ return LobbyBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Script" referent="17">
+      <Item class="Script" referent="19">
         <Properties>
           <string name="Name">Main</string>
           <token name="RunContext">0</token>
@@ -2776,6 +3332,9 @@ local DataService = require(script.Parent.DataService)
 local CarService = require(script.Parent.CarService)
 local ShopService = require(script.Parent.ShopService)
 local RaceService = require(script.Parent.RaceService)
+local MatchService = require(script.Parent.MatchService)
+local FreeDriveService = require(script.Parent.FreeDriveService)
+local Sessions = require(script.Parent.Sessions)
 local LobbyBuilder = require(script.Parent.LobbyBuilder)
 
 Players.RespawnTime = 2
@@ -2784,6 +3343,7 @@ LobbyBuilder.Build()
 DataService.Init()
 CarService.Init()
 ShopService.Init()
+MatchService.Init()
 RaceService.Init()
 
 ---------------------------------------------------------------------------
@@ -2802,9 +3362,26 @@ function handlers.Vote(player, mapId)
 	return RaceService.Vote(player, mapId)
 end
 
+function handlers.VoteType(player, raceType)
+	return RaceService.VoteType(player, raceType)
+end
+
+function handlers.JoinTeamQueue(player, size)
+	return MatchService.Join(player, size)
+end
+
+function handlers.LeaveTeamQueue(player)
+	MatchService.Leave(player)
+	return true, "You left the team queue."
+end
+
+function handlers.FreeDrive(player, mapId)
+	return FreeDriveService.Join(player, mapId)
+end
+
 function handlers.TestDrive(player)
-	if RaceService.IsRacing(player) then
-		return false, "You're in a race!"
+	if Sessions.Get(player) then
+		return false, "Leave your current race or free drive first."
 	end
 	local model = CarService.Spawn(player, LobbyBuilder.GetTestSpawn(), "test", false, { KillY = -60 })
 	if not model then
@@ -2815,20 +3392,24 @@ end
 
 function handlers.ExitCar(player)
 	local _, mode = CarService.Get(player)
-	if mode ~= "test" then
-		return false, "You can't leave your car during a race."
+	if mode == "test" then
+		CarService.Despawn(player)
+		return true
+	elseif mode == "free" then
+		FreeDriveService.Leave(player)
+		return true
 	end
-	CarService.Despawn(player)
-	return true
+	return false, "You can't leave your car during a race."
 end
 
 function handlers.Respawn(player)
-	local model, mode = CarService.Get(player)
+	local model = CarService.Get(player)
 	if not model then
 		return false
 	end
-	if mode == "race" then
-		return true, RaceService.GetRespawn(player)
+	local session = Sessions.Get(player)
+	if session then
+		return true, session:GetRespawn(player)
 	end
 	return true, LobbyBuilder.GetTestSpawn()
 end
@@ -2883,25 +3464,228 @@ end)
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="18">
+      <Item class="ModuleScript" referent="20">
         <Properties>
-          <string name="Name">RaceService</string>
-          <string name="Source"><![CDATA[-- Round-based race loop: intermission + map vote -> load track -> grid
--- & countdown -> race with checkpoints / laps / positions -> results &
--- rewards -> back to the lobby.
+          <string name="Name">MatchService</string>
+          <string name="Source"><![CDATA[-- Team match queues (1v1 up to 5v5). When a queue has enough players the
+-- match starts on its own track: random map, Circuit or Sprint, Red vs
+-- Blue with teams balanced by level. Points by finishing position decide
+-- the winning team.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Maps = require(Shared.Maps)
+local RaceTypes = require(Shared.RaceTypes)
+
+local DataService = require(script.Parent.DataService)
+local RaceSession = require(script.Parent.RaceSession)
+local Sessions = require(script.Parent.Sessions)
+local LobbyBuilder = require(script.Parent.LobbyBuilder)
+
+local MatchService = {}
+MatchService.OnChanged = nil -- set by RaceService to re-broadcast lobby state
+
+local queues = {} -- [size] = { player, ... } in join order
+for _, size in Config.TeamSizes do
+	queues[size] = {}
+end
+
+local function changed()
+	for _, size in Config.TeamSizes do
+		LobbyBuilder.SetTeamPad(size, #queues[size], size * 2)
+	end
+	if MatchService.OnChanged then
+		MatchService.OnChanged()
+	end
+end
+
+function MatchService.QueueOf(player)
+	for size, list in queues do
+		if table.find(list, player) then
+			return size
+		end
+	end
+	return nil
+end
+
+function MatchService.Leave(player)
+	local was = false
+	for _, list in queues do
+		local idx = table.find(list, player)
+		if idx then
+			table.remove(list, idx)
+			was = true
+		end
+	end
+	if was then
+		changed()
+	end
+	return was
+end
+
+function MatchService.Join(player, size)
+	if type(size) ~= "number" or not queues[size] then
+		return false, "Unknown match size."
+	end
+	if Sessions.IsRacing(player) then
+		return false, "Finish your current race first."
+	end
+	local current = MatchService.QueueOf(player)
+	if current == size then
+		return true, string.format("You're already in the %dv%d queue.", size, size)
+	end
+	MatchService.Leave(player)
+	table.insert(queues[size], player)
+	changed()
+	return true,
+		string.format("Joined the %dv%d queue (%d/%d). You can free drive while you wait!", size, size, #queues[size], size * 2)
+end
+
+-- For the client: { { size = 1, count = n, needed = 2, members = {userIds} }, ... }
+function MatchService.Snapshot()
+	local out = {}
+	for _, size in Config.TeamSizes do
+		local members = {}
+		for _, player in queues[size] do
+			table.insert(members, player.UserId)
+		end
+		table.insert(out, { size = size, count = #queues[size], needed = size * 2, members = members })
+	end
+	return out
+end
+
+local function startMatch(size)
+	local list = queues[size]
+	local players = {}
+	for _ = 1, size * 2 do
+		table.insert(players, table.remove(list, 1))
+	end
+	changed()
+
+	local mapId = Maps.Order[math.random(1, #Maps.Order)]
+	local raceType = math.random() < 0.5 and "Circuit" or "Sprint"
+	local label = string.format("%dv%d", size, size)
+	for _, player in players do
+		DataService.Notify(
+			player,
+			string.format(
+				"%s match found! %s on %s. Loading...",
+				label,
+				RaceTypes.List[raceType].name,
+				Maps.List[mapId].name
+			),
+			"success"
+		)
+	end
+	task.wait(Config.MATCH_START_DELAY)
+
+	-- Pull anyone out of free drive (their character goes straight to the grid).
+	local ready = {}
+	for _, player in players do
+		if player.Parent then
+			local current = Sessions.Get(player)
+			if current and current.raceType == "FreeDrive" then
+				current:RemovePlayer(player, true)
+			end
+			if not Sessions.Get(player) then
+				table.insert(ready, player)
+			end
+		end
+	end
+	if #ready < 2 then
+		for _, player in ready do
+			DataService.Notify(player, "Not enough players stayed for the match. You're back in the queue.", "error")
+			table.insert(queues[size], 1, player)
+		end
+		changed()
+		return
+	end
+
+	local session = RaceSession.new({
+		mapId = mapId,
+		raceType = raceType,
+		players = ready,
+		teams = true,
+		label = label,
+	})
+	session:Run()
+end
+
+local function isValid(player)
+	if not player.Parent or Sessions.IsRacing(player) then
+		return false
+	end
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	return humanoid ~= nil and humanoid.Health > 0
+end
+
+function MatchService.Init()
+	Players.PlayerRemoving:Connect(function(player)
+		MatchService.Leave(player)
+	end)
+	task.spawn(function()
+		while true do
+			task.wait(1)
+			for _, size in Config.TeamSizes do
+				local list = queues[size]
+				for i = #list, 1, -1 do
+					if not list[i].Parent then
+						table.remove(list, i)
+					end
+				end
+				-- Only count players who can actually start now.
+				local validCount = 0
+				for _, player in list do
+					if isValid(player) then
+						validCount += 1
+					end
+				end
+				if validCount >= size * 2 then
+					-- Move players who can't start right now to the back.
+					table.sort(list, function(a, b)
+						return isValid(a) and not isValid(b)
+					end)
+					task.spawn(function()
+						local ok, err = pcall(startMatch, size)
+						if not ok then
+							warn("[MatchService] Match error:", err)
+						end
+					end)
+				end
+			end
+		end
+	end)
+	changed()
+end
+
+return MatchService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="21">
+        <Properties>
+          <string name="Name">RaceService</string>
+          <string name="Source"><![CDATA[-- The lobby race round: intermission + map / race-type vote -> a
+-- RaceSession with everyone in the race queue -> back to intermission.
+-- Also broadcasts lobby state (votes, team queues, free-drive counts).
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Maps = require(Shared.Maps)
+local RaceTypes = require(Shared.RaceTypes)
 local Remotes = require(Shared.Remotes)
 
 local DataService = require(script.Parent.DataService)
-local CarService = require(script.Parent.CarService)
-local TrackBuilder = require(script.Parent.TrackBuilder)
 local LobbyBuilder = require(script.Parent.LobbyBuilder)
+local RaceSession = require(script.Parent.RaceSession)
+local Sessions = require(script.Parent.Sessions)
+local MatchService = require(script.Parent.MatchService)
+local FreeDriveService = require(script.Parent.FreeDriveService)
 
 local RaceService = {}
 
@@ -2909,19 +3693,17 @@ local state = {
 	phase = "Waiting",
 	timeLeft = 0,
 	mapId = nil,
+	raceType = nil,
 	laps = 0,
 }
 local votes = {} -- [player] = mapId
+local typeVotes = {} -- [player] = raceType
 local queued = {} -- [player] = bool
-local racers = {} -- [player] = racer record
-local track -- current TrackBuilder result
-local startClock = 0
-local deadline = 0
-local finishCount = 0
+local session = nil -- current lobby-round RaceSession
 
 local PHASE_TEXT = {
 	Waiting = "Waiting for racers",
-	Intermission = "Vote for the next map!",
+	Intermission = "Vote for the next race!",
 	Loading = "Loading track...",
 	Countdown = "Get ready!",
 	Racing = "Race in progress",
@@ -2930,6 +3712,10 @@ local PHASE_TEXT = {
 
 local function isEligible(player)
 	if not queued[player] or not DataService.Get(player) then
+		return false
+	end
+	-- Busy elsewhere: racing, free driving, or waiting for a team match.
+	if Sessions.Get(player) or MatchService.QueueOf(player) then
 		return false
 	end
 	local character = player.Character
@@ -2947,54 +3733,56 @@ local function eligiblePlayers()
 	return list
 end
 
-local function voteCounts()
+local function tally(tbl)
 	local counts = {}
-	for player, mapId in votes do
+	for player, choice in tbl do
 		if player.Parent then
-			counts[mapId] = (counts[mapId] or 0) + 1
+			counts[choice] = (counts[choice] or 0) + 1
 		end
 	end
 	return counts
 end
 
 local function broadcast()
-	local participants = {}
-	for player in racers do
-		table.insert(participants, player.UserId)
-	end
 	local payload = {
 		phase = state.phase,
 		timeLeft = math.max(0, math.ceil(state.timeLeft)),
 		mapId = state.mapId,
+		raceType = state.raceType,
 		laps = state.laps,
-		votes = voteCounts(),
-		participants = participants,
+		votes = tally(votes),
+		typeVotes = tally(typeVotes),
 		queuedCount = #eligiblePlayers(),
+		teamQueues = MatchService.Snapshot(),
+		freeDrive = FreeDriveService.Counts(),
 	}
 	Remotes.Event("RaceState"):FireAllClients(payload)
 
 	local mapName = state.mapId and Maps.List[state.mapId].name or ""
+	local typeName = state.raceType and RaceTypes.List[state.raceType].name or ""
 	local main, sub = PHASE_TEXT[state.phase] or state.phase, ""
 	if state.phase == "Intermission" then
 		main = string.format("Starts in %d", payload.timeLeft)
-		sub = string.format("%d racer(s) ready • vote with the MAP VOTE panel", payload.queuedCount)
+		sub = string.format("%d racer(s) ready • vote with the VOTE panel", payload.queuedCount)
 	elseif state.phase == "Waiting" then
 		sub = "Turn on RACE QUEUE to join"
 	elseif state.phase == "Racing" then
 		main = mapName
-		sub = string.format("Race in progress • %d:%02d left", payload.timeLeft // 60, payload.timeLeft % 60)
+		sub = string.format("%s in progress • %d:%02d left", typeName, payload.timeLeft // 60, payload.timeLeft % 60)
 	elseif state.phase == "Loading" or state.phase == "Countdown" then
-		sub = mapName
+		sub = typeName .. " • " .. mapName
 	end
 	LobbyBuilder.SetStatus(main, sub)
 end
+RaceService.Broadcast = broadcast
 
 ---------------------------------------------------------------------------
--- Public API (called from Main request handlers)
+-- Public API
 ---------------------------------------------------------------------------
 
 function RaceService.SetQueued(player, value)
 	queued[player] = value == true
+	broadcast()
 	return true, queued[player] and "You are in the race queue." or "You left the race queue."
 end
 
@@ -3002,8 +3790,12 @@ function RaceService.IsQueued(player)
 	return queued[player] == true
 end
 
+local function votingOpen()
+	return state.phase == "Intermission" or state.phase == "Waiting"
+end
+
 function RaceService.Vote(player, mapId)
-	if state.phase ~= "Intermission" and state.phase ~= "Waiting" then
+	if not votingOpen() then
 		return false, "Voting is closed."
 	end
 	if type(mapId) ~= "string" or not Maps.List[mapId] then
@@ -3014,266 +3806,45 @@ function RaceService.Vote(player, mapId)
 	return true
 end
 
-function RaceService.IsRacing(player)
-	return racers[player] ~= nil
-end
-
-function RaceService.GetRespawn(player)
-	local racer = racers[player]
-	if racer then
-		return racer.respawnCF
+function RaceService.VoteType(player, raceType)
+	if not votingOpen() then
+		return false, "Voting is closed."
 	end
-	return nil
-end
-
----------------------------------------------------------------------------
--- Race internals
----------------------------------------------------------------------------
-
-local function ordinal(n)
-	local suffix = "th"
-	if n % 100 < 11 or n % 100 > 13 then
-		suffix = ({ "st", "nd", "rd" })[n % 10] or "th"
+	if type(raceType) ~= "string" or not table.find(RaceTypes.Order, raceType) then
+		return false, "Unknown race type."
 	end
-	return n .. suffix
-end
-RaceService.Ordinal = ordinal
-
-local function computeStandings()
-	local list = {}
-	for player, racer in racers do
-		local score
-		if racer.finished then
-			score = 1e9 - racer.place
-		elseif racer.dnf then
-			score = -1e9
-		else
-			local cp = track.checkpoints[racer.nextCP]
-			score = racer.cpPassed * 100000 - (cp.cf.Position - racer.lastPos).Magnitude
-		end
-		table.insert(list, { player = player, racer = racer, score = score })
-	end
-	table.sort(list, function(a, b)
-		return a.score > b.score
-	end)
-	for i, entry in list do
-		entry.racer.position = i
-	end
-	return list
-end
-
-local function finishRacer(player, racer)
-	finishCount += 1
-	racer.finished = true
-	racer.place = finishCount
-	racer.finishTime = os.clock() - startClock
-	Remotes.Event("Checkpoint"):FireClient(player, {
-		finished = true,
-		place = racer.place,
-		time = racer.finishTime,
-	})
-	if finishCount == 1 then
-		deadline = math.min(deadline, os.clock() + Config.FINISH_GRACE)
-		for other in racers do
-			if other ~= player then
-				DataService.Notify(
-					other,
-					string.format("%s won! %d seconds left to finish.", player.DisplayName, Config.FINISH_GRACE),
-					"info"
-				)
-			end
-		end
-	end
-end
-
-local function onCheckpoint(player, racer, cp)
-	racer.cpPassed += 1
-	racer.respawnCF = cp.spawnCF
-	if racer.nextCP == 1 then
-		racer.lap += 1
-		if racer.lap > state.laps then
-			finishRacer(player, racer)
-			return
-		end
-	end
-	racer.nextCP = racer.nextCP % #track.checkpoints + 1
-	Remotes.Event("Checkpoint"):FireClient(player, {
-		lap = math.max(racer.lap, 1),
-		laps = state.laps,
-		newLap = racer.nextCP == 2 and racer.lap > 1,
-	})
-end
-
-local function checkCrossings()
-	for player, racer in racers do
-		if not racer.finished and not racer.dnf then
-			local chassis = racer.model.Parent and racer.model.PrimaryPart
-			if not chassis then
-				racer.dnf = true
-			else
-				local pos = chassis.Position
-				local cp = track.checkpoints[racer.nextCP]
-				local a = cp.cf:PointToObjectSpace(racer.lastPos)
-				local b = cp.cf:PointToObjectSpace(pos)
-				-- Crossing the gate plane moving forward (local +Z -> -Z).
-				if a.Z > 0 and b.Z <= 0 then
-					local t = a.Z / (a.Z - b.Z)
-					local hit = a:Lerp(b, t)
-					if math.abs(hit.X) <= cp.halfWidth and math.abs(hit.Y) <= 25 then
-						onCheckpoint(player, racer, cp)
-					end
-				end
-				racer.lastPos = pos
-			end
-		end
-	end
-end
-
-local function sendUpdates(standings)
-	local board = {}
-	for i, entry in standings do
-		if i > 8 then
-			break
-		end
-		table.insert(board, {
-			name = entry.player.DisplayName,
-			userId = entry.player.UserId,
-			finished = entry.racer.finished,
-			dnf = entry.racer.dnf,
-		})
-	end
-	local elapsed = os.clock() - startClock
-	for _, entry in standings do
-		local player, racer = entry.player, entry.racer
-		if player.Parent then
-			Remotes.Event("RaceUpdate"):FireClient(player, {
-				position = racer.position,
-				total = #standings,
-				lap = math.clamp(racer.lap, 1, state.laps),
-				laps = state.laps,
-				elapsed = racer.finished and racer.finishTime or elapsed,
-				timeLeft = math.max(0, deadline - os.clock()),
-				standings = board,
-			})
-		end
-	end
-end
-
-local function allDone()
-	for _, racer in racers do
-		if not racer.finished and not racer.dnf then
-			return false
-		end
-	end
+	typeVotes[player] = raceType
+	broadcast()
 	return true
 end
 
-local function awardRewards(standings)
-	local R = Config.Rewards
-	local total = 0
-	for _, entry in standings do
-		if entry.racer.finished then
-			total += 1
-		end
-	end
-	local results = {}
-	for _, entry in standings do
-		local player, racer = entry.player, entry.racer
-		local coins, xp, newBest, xpCoins = 0, 0, false, 0
-		if racer.finished then
-			local beaten = #standings - racer.place
-			coins = R.base + R.perLap * state.laps + R.perBeaten * beaten + (R.placeBonus[racer.place] or 0)
-			if #standings == 1 then
-				xp = R.xpSolo
-			else
-				xp = R.xpByPlace[racer.place] or R.xpFinish
-			end
-		else
-			coins, xp = R.dnfCoins, R.dnfXP
-		end
+---------------------------------------------------------------------------
+-- Round loop
+---------------------------------------------------------------------------
 
-		local data = player.Parent and DataService.Get(player)
-		if data then
-			if racer.finished then
-				local best = data.bestTimes[state.mapId]
-				if not best or racer.finishTime < best then
-					data.bestTimes[state.mapId] = racer.finishTime
-					if best then
-						newBest = true
-						coins += R.newBestCoins
-					end
-				end
-			end
-			if DataService.HasPass(player, "VIP") then
-				coins *= 2
-			end
-			if DataService.HasPass(player, "DoubleXP") then
-				xp *= 2
-			end
-			data.stats.races += 1
-			if racer.finished and racer.place == 1 and #standings >= 2 then
-				data.stats.wins += 1
-			end
-			if racer.finished and racer.place <= 3 and #standings >= 2 then
-				data.stats.podiums += 1
-			end
-			DataService.AddCoins(player, coins)
-			xpCoins = DataService.AddXP(player, xp)
-			DataService.Push(player)
-		end
-
-		table.insert(results, {
-			userId = player.UserId,
-			name = player.DisplayName,
-			place = racer.finished and racer.place or nil,
-			time = racer.finished and racer.finishTime or nil,
-			coins = coins,
-			xp = xp,
-			xpCoins = xpCoins, -- XP converted to coins at the level cap
-			newBest = newBest,
-		})
-	end
-	return results
-end
-
-local function pickMap()
-	local counts = voteCounts()
+local function pickFrom(order, choices, default)
+	local counts = tally(choices)
 	local best, bestCount = {}, 0
-	for _, mapId in Maps.Order do
-		local c = counts[mapId] or 0
+	for _, id in order do
+		local c = counts[id] or 0
 		if c > bestCount then
-			best, bestCount = { mapId }, c
-		elseif c == bestCount then
-			table.insert(best, mapId)
+			best, bestCount = { id }, c
+		elseif c == bestCount and c > 0 then
+			table.insert(best, id)
 		end
+	end
+	if #best == 0 then
+		return default or order[math.random(1, #order)]
 	end
 	return best[math.random(1, #best)]
 end
 
-local function cleanupRace()
-	for player in racers do
-		CarService.Despawn(player)
-		if player.Parent then
-			task.spawn(function()
-				pcall(function()
-					player:LoadCharacter()
-				end)
-			end)
-		end
-	end
-	racers = {}
-	if track then
-		track.model:Destroy()
-		track = nil
-	end
-	state.mapId = nil
-	state.laps = 0
-end
-
 local function runRound()
-	-- Intermission / voting ------------------------------------------------
 	votes = {}
+	typeVotes = {}
 	state.mapId = nil
+	state.raceType = nil
+	state.laps = 0
 	state.timeLeft = Config.INTERMISSION_TIME
 	while true do
 		if #eligiblePlayers() < Config.MIN_RACERS then
@@ -3292,94 +3863,24 @@ local function runRound()
 		end
 	end
 
-	-- Load ---------------------------------------------------------------------
-	local mapId = pickMap()
-	local map = Maps.List[mapId]
-	state.phase = "Loading"
-	state.mapId = mapId
-	state.laps = map.laps
-	broadcast()
-
-	track = TrackBuilder.Build(map, Config.TRACK_ORIGIN)
-	track.model.Name = "ActiveTrack"
-	track.model.Parent = workspace
-	task.wait(2)
-
-	local list = eligiblePlayers()
-	for i = #list, 2, -1 do
-		local j = math.random(1, i)
-		list[i], list[j] = list[j], list[i]
-	end
-	for i, player in list do
-		local slot = track.grid[i] or (track.grid[#track.grid] * CFrame.new(0, 0, 12 * (i - #track.grid)))
-		local model = CarService.Spawn(player, slot, "race", true, { KillY = track.killY, MapId = mapId })
-		if model then
-			racers[player] = {
-				model = model,
-				lap = 0,
-				nextCP = 1,
-				cpPassed = 0,
-				finished = false,
-				dnf = false,
-				lastPos = model.PrimaryPart.Position,
-				respawnCF = slot,
-				position = i,
-			}
-		end
-	end
-
-	if next(racers) == nil then
-		cleanupRace()
-		return
-	end
-
-	-- Countdown -----------------------------------------------------------------
-	state.phase = "Countdown"
-	for n = Config.COUNTDOWN, 1, -1 do
-		state.timeLeft = n
-		broadcast()
-		for player in racers do
-			Remotes.Event("Countdown"):FireClient(player, n)
-		end
-		task.wait(1)
-	end
-	for player in racers do
-		Remotes.Event("Countdown"):FireClient(player, 0)
-		CarService.Release(player)
-	end
-
-	-- Race ------------------------------------------------------------------------
-	state.phase = "Racing"
-	startClock = os.clock()
-	deadline = startClock + Config.MAX_RACE_TIME
-	finishCount = 0
-	local heartbeat = RunService.Heartbeat:Connect(checkCrossings)
-	local lastBroadcast = 0
-	while os.clock() < deadline and not allDone() do
-		local standings = computeStandings()
-		sendUpdates(standings)
-		state.timeLeft = deadline - os.clock()
-		if os.clock() - lastBroadcast >= 1 then
-			lastBroadcast = os.clock()
+	local players = eligiblePlayers()
+	local mapId = pickFrom(Maps.Order, votes)
+	local raceType = pickFrom(RaceTypes.Order, typeVotes, "Circuit")
+	session = RaceSession.new({
+		mapId = mapId,
+		raceType = raceType,
+		players = players,
+		onUpdate = function(s)
+			state.phase = s.phase
+			state.timeLeft = s.timeLeft
+			state.laps = s.laps
 			broadcast()
-		end
-		task.wait(0.25)
-	end
-	heartbeat:Disconnect()
-
-	-- Results -----------------------------------------------------------------------
-	state.phase = "Results"
-	state.timeLeft = Config.RESULTS_TIME
-	local standings = computeStandings()
-	local results = awardRewards(standings)
-	for player in racers do
-		if player.Parent then
-			Remotes.Event("RaceResults"):FireClient(player, { mapId = state.mapId, results = results })
-		end
-	end
-	broadcast()
-	task.wait(Config.RESULTS_TIME)
-	cleanupRace()
+		end,
+	})
+	state.mapId = mapId
+	state.raceType = session.raceType
+	session:Run()
+	session = nil
 end
 
 function RaceService.Init()
@@ -3392,19 +3893,25 @@ function RaceService.Init()
 	Players.PlayerRemoving:Connect(function(player)
 		queued[player] = nil
 		votes[player] = nil
-		local racer = racers[player]
-		if racer then
-			racer.dnf = true
-			racers[player] = nil
+		typeVotes[player] = nil
+		local s = Sessions.Get(player)
+		if s then
+			s:RemovePlayer(player)
 		end
 	end)
+
+	MatchService.OnChanged = broadcast
+	FreeDriveService.OnChanged = broadcast
 
 	task.spawn(function()
 		while true do
 			local ok, err = pcall(runRound)
 			if not ok then
 				warn("[RaceService] Round error:", err)
-				pcall(cleanupRace)
+				if session then
+					pcall(session.Cleanup, session)
+					session = nil
+				end
 				task.wait(3)
 			end
 		end
@@ -3415,7 +3922,670 @@ return RaceService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="19">
+      <Item class="ModuleScript" referent="22">
+        <Properties>
+          <string name="Name">RaceSession</string>
+          <string name="Source"><![CDATA[-- One race (or free-drive) on its own copy of a track. Several sessions can
+-- run at the same time: the lobby round, team matches and free-drive
+-- circuits each get a separate track "slot".
+--
+-- Race flow: build track -> grid -> countdown -> checkpoints / laps /
+-- positions (plus eliminations or team points) -> results & rewards ->
+-- everyone back to the lobby.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Maps = require(Shared.Maps)
+local RaceTypes = require(Shared.RaceTypes)
+local Remotes = require(Shared.Remotes)
+
+local DataService = require(script.Parent.DataService)
+local CarService = require(script.Parent.CarService)
+local TrackBuilder = require(script.Parent.TrackBuilder)
+local Sessions = require(script.Parent.Sessions)
+
+local RaceSession = {}
+RaceSession.__index = RaceSession
+
+local usedSlots = {}
+
+local function tracksFolder()
+	local folder = workspace:FindFirstChild("Tracks")
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = "Tracks"
+		folder.Parent = workspace
+	end
+	return folder
+end
+
+local function allocSlot()
+	local slot = 0
+	while usedSlots[slot] do
+		slot += 1
+	end
+	usedSlots[slot] = true
+	return slot
+end
+
+local function reloadCharacter(player)
+	if player.Parent then
+		task.spawn(function()
+			pcall(function()
+				player:LoadCharacter()
+			end)
+		end)
+	end
+end
+
+-- opts: mapId, raceType, players, teams (bool), label, onUpdate(session)
+function RaceSession.new(opts)
+	local map = Maps.List[opts.mapId]
+	local players = opts.players or {}
+	local raceType = opts.raceType == "FreeDrive" and "FreeDrive" or RaceTypes.Resolve(opts.raceType, #players)
+	local self = setmetatable({
+		mapId = opts.mapId,
+		map = map,
+		raceType = raceType,
+		label = opts.label,
+		teams = opts.teams == true,
+		onUpdate = opts.onUpdate,
+		players = players,
+		racers = {},
+		phase = "Loading",
+		timeLeft = 0,
+		laps = raceType == "FreeDrive" and 0 or RaceTypes.Laps(raceType, map, #players),
+		finishCount = 0,
+		startClock = 0,
+		deadline = math.huge,
+		eliminatedLaps = {},
+		slot = allocSlot(),
+	}, RaceSession)
+	return self
+end
+
+function RaceSession:SetPhase(phase, timeLeft)
+	self.phase = phase
+	self.timeLeft = timeLeft or self.timeLeft
+	if self.onUpdate then
+		self.onUpdate(self)
+	end
+end
+
+function RaceSession:BuildTrack()
+	local origin = Config.TRACK_ORIGIN + Vector3.new(self.slot * Config.TRACK_SLOT_SPACING, 0, 0)
+	local track = TrackBuilder.Build(self.map, origin)
+	track.model.Name = "Track_" .. self.slot
+	track.model.Parent = tracksFolder()
+	self.track = track
+end
+
+function RaceSession:SpawnRacer(player, gridIndex, anchored, team)
+	local grid = self.track.grid
+	local cf = grid[gridIndex] or (grid[#grid] * CFrame.new(0, 0, 12 * (gridIndex - #grid)))
+	local free = self.raceType == "FreeDrive"
+	local extra = { KillY = self.track.killY, MapId = self.mapId, RaceType = self.raceType, Team = team }
+	local onExit = free and function()
+		self:RemovePlayer(player)
+	end or nil
+	local model = CarService.Spawn(player, cf, free and "free" or "race", anchored, extra, onExit)
+	if not model then
+		return nil
+	end
+	local racer = {
+		model = model,
+		name = player.DisplayName,
+		team = team,
+		lap = 0,
+		nextCP = 1,
+		cpPassed = 0,
+		finished = false,
+		dnf = false,
+		eliminated = false,
+		lastPos = model.PrimaryPart.Position,
+		respawnCF = cf,
+		position = gridIndex,
+	}
+	self.racers[player] = racer
+	Sessions.Set(player, self)
+	return racer
+end
+
+function RaceSession:GetRespawn(player)
+	local racer = self.racers[player]
+	return racer and racer.respawnCF
+end
+
+-- Player left the game, left free drive, or was pulled into a team match.
+-- keepCharacter: don't send them back to the lobby (they're going somewhere else).
+function RaceSession:RemovePlayer(player, keepCharacter)
+	local racer = self.racers[player]
+	if not racer then
+		return
+	end
+	local ours = Sessions.Get(player) == self
+	Sessions.Clear(player, self)
+	if CarService.Get(player) == racer.model then
+		CarService.Despawn(player)
+	end
+	if self.raceType == "FreeDrive" then
+		self.racers[player] = nil
+		if ours and not keepCharacter then
+			reloadCharacter(player)
+		end
+	elseif not racer.finished and not racer.eliminated then
+		racer.dnf = true
+	end
+end
+
+---------------------------------------------------------------------------
+-- Checkpoints, laps, eliminations
+---------------------------------------------------------------------------
+function RaceSession:ActiveRacers()
+	local list = {}
+	for player, racer in self.racers do
+		if not racer.finished and not racer.dnf and not racer.eliminated then
+			table.insert(list, { player = player, racer = racer })
+		end
+	end
+	return list
+end
+
+function RaceSession:Finish(player, racer)
+	self.finishCount += 1
+	racer.finished = true
+	racer.place = self.finishCount
+	racer.finishTime = os.clock() - self.startClock
+	Remotes.Event("Checkpoint"):FireClient(player, { finished = true, place = racer.place, time = racer.finishTime })
+	if self.finishCount == 1 then
+		self.deadline = math.min(self.deadline, os.clock() + Config.FINISH_GRACE)
+		for other, otherRacer in self.racers do
+			if other ~= player and other.Parent and not otherRacer.finished and not otherRacer.eliminated then
+				DataService.Notify(
+					other,
+					string.format("%s won! %d seconds left to finish.", player.DisplayName, Config.FINISH_GRACE),
+					"info"
+				)
+			end
+		end
+	end
+end
+
+function RaceSession:Eliminate(player, racer)
+	racer.eliminated = true
+	racer.place = #self:ActiveRacers() + 1
+	Remotes.Event("Checkpoint"):FireClient(player, { eliminated = true, place = racer.place })
+	DataService.Notify(player, string.format("ELIMINATED in %d%s place! Results come at the end of the race.", racer.place, ({ "st", "nd", "rd" })[racer.place] or "th"), "error")
+	for other in self.racers do
+		if other ~= player and other.Parent then
+			DataService.Notify(other, racer.name .. " was eliminated!", "error")
+		end
+	end
+	-- Send them back to the lobby; they still get results at the end.
+	Sessions.Clear(player, self)
+	if CarService.Get(player) == racer.model then
+		CarService.Despawn(player)
+	end
+	reloadCharacter(player)
+end
+
+-- When the leader completes lap `lap`, the last active racer is knocked out.
+function RaceSession:EliminationCheck(lap)
+	if self.eliminatedLaps[lap] then
+		return
+	end
+	local active = self:ActiveRacers()
+	if #active <= 2 then
+		return
+	end
+	self.eliminatedLaps[lap] = true
+	local standings = self:ComputeStandings()
+	for i = #standings, 1, -1 do
+		local entry = standings[i]
+		local r = entry.racer
+		if not r.finished and not r.dnf and not r.eliminated then
+			self:Eliminate(entry.player, r)
+			return
+		end
+	end
+end
+
+function RaceSession:OnCheckpoint(player, racer, cp)
+	racer.cpPassed += 1
+	racer.respawnCF = cp.spawnCF
+	if racer.nextCP == 1 then
+		if self.raceType == "FreeDrive" then
+			local now = os.clock()
+			if racer.lapStart then
+				local lapTime = now - racer.lapStart
+				local best = racer.bestLap == nil or lapTime < racer.bestLap
+				racer.bestLap = best and lapTime or racer.bestLap
+				Remotes.Event("Checkpoint"):FireClient(player, { freeLap = lapTime, best = best })
+			end
+			racer.lapStart = now
+		else
+			racer.lap += 1
+			if racer.lap > self.laps then
+				self:Finish(player, racer)
+				return
+			end
+			if self.raceType == "Elimination" and racer.lap > 1 then
+				self:EliminationCheck(racer.lap - 1)
+			end
+		end
+	end
+	racer.nextCP = racer.nextCP % #self.track.checkpoints + 1
+	if self.raceType ~= "FreeDrive" then
+		Remotes.Event("Checkpoint"):FireClient(player, {
+			lap = math.max(racer.lap, 1),
+			laps = self.laps,
+			newLap = racer.nextCP == 2 and racer.lap > 1,
+		})
+	end
+end
+
+function RaceSession:CheckCrossings()
+	for player, racer in self.racers do
+		if racer.finished or racer.dnf or racer.eliminated then
+			continue
+		end
+		local chassis = racer.model.Parent and racer.model.PrimaryPart
+		if not chassis then
+			-- Car is gone (driver died or left).
+			if self.raceType == "FreeDrive" then
+				task.defer(self.RemovePlayer, self, player)
+			else
+				racer.dnf = true
+				Sessions.Clear(player, self)
+			end
+			continue
+		end
+		local pos = chassis.Position
+		local cp = self.track.checkpoints[racer.nextCP]
+		local a = cp.cf:PointToObjectSpace(racer.lastPos)
+		local b = cp.cf:PointToObjectSpace(pos)
+		-- Crossing the gate plane moving forward (local +Z -> -Z).
+		if a.Z > 0 and b.Z <= 0 then
+			local t = a.Z / (a.Z - b.Z)
+			local hit = a:Lerp(b, t)
+			if math.abs(hit.X) <= cp.halfWidth and math.abs(hit.Y) <= 25 then
+				self:OnCheckpoint(player, racer, cp)
+			end
+		end
+		racer.lastPos = pos
+	end
+end
+
+---------------------------------------------------------------------------
+-- Standings, team points, rewards
+---------------------------------------------------------------------------
+function RaceSession:ComputeStandings()
+	local list = {}
+	for player, racer in self.racers do
+		local score
+		if racer.finished then
+			score = 3e9 - racer.place
+		elseif racer.dnf then
+			score = -3e9
+		elseif racer.eliminated then
+			score = -1e9 - racer.place
+		else
+			local cp = self.track.checkpoints[racer.nextCP]
+			score = racer.cpPassed * 100000 - (cp.cf.Position - racer.lastPos).Magnitude
+		end
+		table.insert(list, { player = player, racer = racer, score = score })
+	end
+	table.sort(list, function(a, b)
+		return a.score > b.score
+	end)
+	for i, entry in list do
+		entry.racer.position = i
+	end
+	return list
+end
+
+-- Points per team from the given standings, plus the winning team.
+function RaceSession:TeamScores(standings)
+	if not self.teams then
+		return nil
+	end
+	local scores = { Red = 0, Blue = 0 }
+	local best = {}
+	for i, entry in standings do
+		local r = entry.racer
+		if r.team and not r.dnf then
+			scores[r.team] += Config.TeamPoints[i] or 0
+			best[r.team] = best[r.team] or i
+		end
+	end
+	local winner
+	if scores.Red ~= scores.Blue then
+		winner = scores.Red > scores.Blue and "Red" or "Blue"
+	else
+		winner = (best.Red or math.huge) < (best.Blue or math.huge) and "Red" or "Blue"
+	end
+	return { Red = scores.Red, Blue = scores.Blue, winner = winner }
+end
+
+function RaceSession:SendUpdates(standings)
+	local board = {}
+	for i, entry in standings do
+		if i > 10 then
+			break
+		end
+		table.insert(board, {
+			name = entry.player.DisplayName,
+			userId = entry.player.UserId,
+			finished = entry.racer.finished,
+			dnf = entry.racer.dnf,
+			eliminated = entry.racer.eliminated,
+			team = entry.racer.team,
+		})
+	end
+	local teamScores = self:TeamScores(standings)
+	local elapsed = os.clock() - self.startClock
+	for _, entry in standings do
+		local player, racer = entry.player, entry.racer
+		if player.Parent and Sessions.Get(player) == self then
+			Remotes.Event("RaceUpdate"):FireClient(player, {
+				position = racer.position,
+				total = #standings,
+				lap = math.clamp(racer.lap, 1, self.laps),
+				laps = self.laps,
+				elapsed = racer.finished and racer.finishTime or elapsed,
+				timeLeft = math.max(0, self.deadline - os.clock()),
+				raceType = self.raceType,
+				label = self.label,
+				team = racer.team,
+				teamScores = teamScores,
+				standings = board,
+			})
+		end
+	end
+end
+
+function RaceSession:AllDone()
+	for _, racer in self.racers do
+		if not racer.finished and not racer.dnf and not racer.eliminated then
+			return false
+		end
+	end
+	return true
+end
+
+function RaceSession:AwardRewards(standings, teamScores)
+	local R = Config.Rewards
+	local results = {}
+	for _, entry in standings do
+		local player, racer = entry.player, entry.racer
+		local coins, xp, newBest, xpCoins = 0, 0, false, 0
+		if racer.place then
+			local beaten = #standings - racer.place
+			coins = R.base + R.perLap * self.laps + R.perBeaten * beaten + (R.placeBonus[racer.place] or 0)
+			if #standings == 1 then
+				xp = R.xpSolo
+			else
+				xp = R.xpByPlace[racer.place] or R.xpFinish
+			end
+		else
+			coins, xp = R.dnfCoins, R.dnfXP
+		end
+		local wonTeam = teamScores ~= nil and racer.team == teamScores.winner
+		if wonTeam then
+			coins += R.teamWinCoins
+			xp += R.teamWinXP
+		end
+
+		local data = player.Parent and DataService.Get(player)
+		if data then
+			if racer.finished then
+				local key = self.mapId .. (self.raceType == "Sprint" and ":Sprint" or "")
+				local best = data.bestTimes[key]
+				if not best or racer.finishTime < best then
+					data.bestTimes[key] = racer.finishTime
+					if best then
+						newBest = true
+						coins += R.newBestCoins
+					end
+				end
+			end
+			if DataService.HasPass(player, "VIP") then
+				coins *= 2
+			end
+			if DataService.HasPass(player, "DoubleXP") then
+				xp *= 2
+			end
+			data.stats.races += 1
+			if racer.place == 1 and #standings >= 2 then
+				data.stats.wins += 1
+			end
+			if racer.place and racer.place <= 3 and #standings >= 2 then
+				data.stats.podiums += 1
+			end
+			DataService.AddCoins(player, coins)
+			xpCoins = DataService.AddXP(player, xp)
+			DataService.Push(player)
+		end
+
+		table.insert(results, {
+			userId = player.UserId,
+			name = player.DisplayName,
+			place = racer.place,
+			time = racer.finished and racer.finishTime or nil,
+			eliminated = racer.eliminated,
+			team = racer.team,
+			teamWin = wonTeam,
+			coins = coins,
+			xp = xp,
+			xpCoins = xpCoins,
+			newBest = newBest,
+		})
+	end
+	return results
+end
+
+---------------------------------------------------------------------------
+-- Lifecycle
+---------------------------------------------------------------------------
+function RaceSession:Cleanup()
+	for player, racer in self.racers do
+		if Sessions.Get(player) == self then
+			Sessions.Clear(player, self)
+			if CarService.Get(player) == racer.model then
+				CarService.Despawn(player)
+			end
+			reloadCharacter(player)
+		end
+	end
+	self.racers = {}
+	if self.track then
+		self.track.model:Destroy()
+		self.track = nil
+	end
+	usedSlots[self.slot] = nil
+	self.closed = true
+end
+
+-- Orders players for the grid. Teams are balanced by level (snake draft).
+function RaceSession:GridOrder()
+	local list = {}
+	for _, player in self.players do
+		if player.Parent then
+			table.insert(list, player)
+		end
+	end
+	local teamOf = {}
+	if self.teams then
+		table.sort(list, function(a, b)
+			local da, db = DataService.Get(a), DataService.Get(b)
+			return (da and da.level or 0) > (db and db.level or 0)
+		end)
+		for i, player in list do
+			local pick = (i - 1) % 4
+			teamOf[player] = (pick == 0 or pick == 3) and "Red" or "Blue"
+		end
+	else
+		for i = #list, 2, -1 do
+			local j = math.random(1, i)
+			list[i], list[j] = list[j], list[i]
+		end
+	end
+	return list, teamOf
+end
+
+function RaceSession:Run()
+	self:SetPhase("Loading")
+	self:BuildTrack()
+	task.wait(2)
+
+	local list, teamOf = self:GridOrder()
+	for i, player in list do
+		self:SpawnRacer(player, i, true, teamOf[player])
+	end
+	if next(self.racers) == nil then
+		self:Cleanup()
+		return
+	end
+	self.laps = RaceTypes.Laps(self.raceType, self.map, #list)
+
+	for n = Config.COUNTDOWN, 1, -1 do
+		self:SetPhase("Countdown", n)
+		for player in self.racers do
+			if player.Parent then
+				Remotes.Event("Countdown"):FireClient(player, n)
+			end
+		end
+		task.wait(1)
+	end
+	for player in self.racers do
+		if player.Parent then
+			Remotes.Event("Countdown"):FireClient(player, 0)
+			CarService.Release(player)
+		end
+	end
+
+	self.startClock = os.clock()
+	self.deadline = self.startClock + Config.MAX_RACE_TIME
+	self:SetPhase("Racing", Config.MAX_RACE_TIME)
+	local heartbeat = RunService.Heartbeat:Connect(function()
+		self:CheckCrossings()
+	end)
+	local lastTick = 0
+	while os.clock() < self.deadline and not self:AllDone() do
+		-- Elimination: the last car standing wins.
+		if self.raceType == "Elimination" and self.finishCount == 0 then
+			local active = self:ActiveRacers()
+			if #active == 1 and next(self.eliminatedLaps) ~= nil then
+				self:Finish(active[1].player, active[1].racer)
+			end
+		end
+		self:SendUpdates(self:ComputeStandings())
+		self.timeLeft = self.deadline - os.clock()
+		if os.clock() - lastTick >= 1 then
+			lastTick = os.clock()
+			self:SetPhase("Racing")
+		end
+		task.wait(0.25)
+	end
+	heartbeat:Disconnect()
+
+	local standings = self:ComputeStandings()
+	local teamScores = self:TeamScores(standings)
+	local results = self:AwardRewards(standings, teamScores)
+	for player in self.racers do
+		if player.Parent then
+			Remotes.Event("RaceResults"):FireClient(player, {
+				mapId = self.mapId,
+				raceType = self.raceType,
+				label = self.label,
+				teams = teamScores,
+				results = results,
+			})
+		end
+	end
+	self:SetPhase("Results", Config.RESULTS_TIME)
+	task.wait(Config.RESULTS_TIME)
+	self:Cleanup()
+end
+
+-- Free drive: stays open while anyone is driving it.
+function RaceSession:RunFreeDrive()
+	self:BuildTrack()
+	self:SetPhase("FreeDrive")
+	self.startClock = os.clock()
+	local heartbeat = RunService.Heartbeat:Connect(function()
+		self:CheckCrossings()
+	end)
+	local emptySince = nil
+	while true do
+		task.wait(1)
+		if next(self.racers) == nil then
+			emptySince = emptySince or os.clock()
+			if os.clock() - emptySince >= Config.FREE_DRIVE_EMPTY_GRACE then
+				break
+			end
+		else
+			emptySince = nil
+		end
+	end
+	self.closing = true
+	heartbeat:Disconnect()
+	self:Cleanup()
+end
+
+function RaceSession:AddPlayer(player)
+	self.spawnIndex = (self.spawnIndex or 0) % #self.track.grid + 1
+	return self:SpawnRacer(player, self.spawnIndex, false, nil)
+end
+
+function RaceSession:PlayerCount()
+	local n = 0
+	for _ in self.racers do
+		n += 1
+	end
+	return n
+end
+
+return RaceSession
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="23">
+        <Properties>
+          <string name="Name">Sessions</string>
+          <string name="Source"><![CDATA[-- Which race / free-drive session each player is currently in.
+local Sessions = {}
+
+local byPlayer = {}
+
+function Sessions.Get(player)
+	return byPlayer[player]
+end
+
+function Sessions.Set(player, session)
+	byPlayer[player] = session
+end
+
+-- Only clears if the player is still in `session` (they may have moved on).
+function Sessions.Clear(player, session)
+	if byPlayer[player] == session then
+		byPlayer[player] = nil
+	end
+end
+
+-- True if the player is in a competitive race (not free drive).
+function Sessions.IsRacing(player)
+	local session = byPlayer[player]
+	return session ~= nil and session.raceType ~= "FreeDrive"
+end
+
+return Sessions
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="24">
         <Properties>
           <string name="Name">Sha256</string>
           <string name="Source"><![CDATA[-- SHA-256 (hex digest). Used so secret codes are stored only as hashes.
@@ -3473,7 +4643,7 @@ end
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="20">
+      <Item class="ModuleScript" referent="25">
         <Properties>
           <string name="Name">ShopService</string>
           <string name="Source"><![CDATA[-- Coin purchases (cars, upgrades), customisation, codes and every Robux
@@ -3582,6 +4752,9 @@ function ShopService.Handlers.Customize(player, carId, category, optionId)
 	if not ok then
 		return false, reason
 	end
+	if not Customization.Owns(data, category, option) then
+		return false, string.format("Buy the %s first (%d coins).", option.id, option.price)
+	end
 	DataService.EnsureCar(data, carId)
 	data.custom[carId][category] = optionId
 	DataService.Push(player)
@@ -3647,6 +4820,34 @@ local function redeemAdminCode(player, data, code)
 	DataService.Push(player)
 	DataService.Save(player)
 	notify(player, "ADMIN ACCESS GRANTED: level 50, every car and every customization unlocked.", "levelup")
+	return true
+end
+
+-- Buy a cosmetic item (wings / eyes / trail) with coins and equip it on
+-- the selected car.
+function ShopService.Handlers.BuyItem(player, category, optionId)
+	local data = DataService.Get(player)
+	if not data or type(category) ~= "string" or type(optionId) ~= "string" then
+		return false, "Invalid item."
+	end
+	if not Customization.ItemCategories[category] then
+		return false, "That can't be bought."
+	end
+	local option = Customization.Find(category, optionId)
+	if not option or not option.price then
+		return false, "Invalid item."
+	end
+	if Customization.Owns(data, category, option) then
+		return false, "You already own this."
+	end
+	if not DataService.SpendCoins(player, option.price) then
+		return false, "Not enough coins."
+	end
+	data.items[Customization.ItemKey(category, optionId)] = true
+	DataService.EnsureCar(data, data.selectedCar)
+	data.custom[data.selectedCar][category] = optionId
+	DataService.Push(player)
+	notify(player, string.format("Bought %s %s! Equipped on your %s.", optionId, category, Cars.List[data.selectedCar].name), "success")
 	return true
 end
 
@@ -3839,7 +5040,7 @@ return ShopService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="21">
+      <Item class="ModuleScript" referent="26">
         <Properties>
           <string name="Name">TrackBuilder</string>
           <string name="Source"><![CDATA[-- Generates a complete race track from a map definition (see Shared.Maps):
@@ -4140,6 +5341,41 @@ function Deco.lamp(parent, pos, facing, neonColor)
 	light.Parent = head
 end
 
+function Deco.streetLight(parent, base, inward, color)
+	color = color or rgb(255, 220, 160)
+	local poleH = 26
+	local metal = rgb(55, 58, 64)
+	newPart(parent, Vector3.new(1.2, poleH, 1.2), CFrame.new(base + Vector3.new(0, poleH / 2, 0)), metal, Enum.Material.Metal)
+	newPart(parent, Vector3.new(2.4, 1, 2.4), CFrame.new(base + Vector3.new(0, 0.5, 0)), metal, Enum.Material.Metal)
+	local top = base + Vector3.new(0, poleH, 0)
+	local flatIn = Vector3.new(inward.X, 0, inward.Z).Unit
+	newPart(
+		parent,
+		Vector3.new(0.7, 0.7, 14),
+		CFrame.lookAt(top, top + flatIn) * CFrame.new(0, 0, -7),
+		metal,
+		Enum.Material.Metal,
+		{ visualOnly = true }
+	)
+	local headPos = top + flatIn * 13 - Vector3.new(0, 0.6, 0)
+	local head = newPart(
+		parent,
+		Vector3.new(3, 0.5, 5),
+		CFrame.lookAt(headPos, headPos + flatIn),
+		color,
+		Enum.Material.Neon,
+		{ visualOnly = true }
+	)
+	local light = Instance.new("SpotLight")
+	light.Face = Enum.NormalId.Bottom
+	light.Angle = 120
+	light.Range = 60
+	light.Brightness = 4
+	light.Color = color
+	light.Shadows = false
+	light.Parent = head
+end
+
 local THEMES = {}
 
 function THEMES.speedway(parent, pos, rng)
@@ -4214,7 +5450,8 @@ function TrackBuilder.Build(map, origin)
 
 	local points = {}
 	for _, p in map.points do
-		table.insert(points, origin + Vector3.new(p[1], p[2], p[3]))
+		local scale = map.scale or 1
+		table.insert(points, origin + Vector3.new(p[1] * scale, p[2], p[3] * scale))
 	end
 	local samples = TrackBuilder.Sample(points, SAMPLE_SPACING)
 	local frames = buildFrames(samples)
@@ -4230,6 +5467,7 @@ function TrackBuilder.Build(map, origin)
 	local groundTop = minY - 0.6
 
 	local roadColor, roadMat = map.road.color, map.road.material
+	local lanes = math.max(1, math.floor(W / 10 + 0.5))
 	local barrierColor, barrierMat = map.barrier.color, map.barrier.material
 
 	for i = 1, n do
@@ -4250,15 +5488,19 @@ function TrackBuilder.Build(map, origin)
 			{ shape = Enum.PartType.Cylinder }
 		)
 
+		-- Dashed lane dividers.
 		if i % 3 == 0 then
-			newPart(
-				roadFolder,
-				Vector3.new(0.6, 0.1, len * 0.6),
-				segCF * CFrame.new(0, 0.52, 0),
-				Color3.fromRGB(235, 235, 235),
-				Enum.Material.SmoothPlastic,
-				{ visualOnly = true }
-			)
+			local laneWidth = W / lanes
+			for lane = 1, lanes - 1 do
+				newPart(
+					roadFolder,
+					Vector3.new(0.5, 0.1, len * 0.6),
+					segCF * CFrame.new(-W / 2 + lane * laneWidth, 0.52, 0),
+					Color3.fromRGB(235, 235, 235),
+					Enum.Material.SmoothPlastic,
+					{ visualOnly = true }
+				)
+			end
 		end
 
 		for _, side in { -1, 1 } do
@@ -4307,7 +5549,12 @@ function TrackBuilder.Build(map, origin)
 			)
 		end
 
-		if map.lamps and i % (map.lampEvery or 12) == 0 then
+		-- Night tracks: street lights on alternating sides, arms reaching over the road.
+		if map.night and i % 10 == 0 then
+			local side = (i // 10) % 2 == 0 and 1 or -1
+			local base = a + f.right * side * (W / 2 + 4) - f.up * 0.5
+			Deco.streetLight(sceneryFolder, base, -f.right * side, map.lampColor)
+		elseif map.lamps and i % (map.lampEvery or 12) == 0 then
 			local side = (i // (map.lampEvery or 12)) % 2 == 0 and 1 or -1
 			local base = a + f.right * side * (W / 2 + 5) - Vector3.new(0, 0.5, 0)
 			local neon = map.theme == "neon"
@@ -4389,30 +5636,38 @@ function TrackBuilder.Build(map, origin)
 		end
 	end
 
-	-- Starting grid (two columns, staggered) ----------------------------------
+	-- Starting grid (up to 4 across, staggered) --------------------------------
 	local grid = {}
+	local cols = math.clamp(lanes // 2 + 1, 2, 4)
 	for k = 0, 23 do
-		local row = k // 2
-		local col = k % 2
+		local row = k // cols
+		local col = k % cols
 		local idx = (1 - (3 + row * 3) - 1) % n + 1
 		local f = frames[idx]
-		local lateral = (col == 0 and -1 or 1) * W / 4
-		local pos = f.pos + f.right * lateral + f.up * 3 - f.dir * (col * 6)
+		local lateral = (col - (cols - 1) / 2) * (W / (cols + 0.5))
+		local pos = f.pos + f.right * lateral + f.up * 3 - f.dir * (col * 3)
 		grid[k + 1] = CFrame.lookAt(pos, pos + f.dir)
 	end
 
 	-- Ground, sea ----------------------------------------------------------------
 	if not map.noGround then
 		local cx, cz = (minX + maxX) / 2, (minZ + maxZ) / 2
-		local sx = math.min(2048, (maxX - minX) + 700)
-		local sz = math.min(2048, (maxZ - minZ) + 700)
-		newPart(
-			model,
-			Vector3.new(sx, 4, sz),
-			CFrame.new(cx, groundTop - 2, cz),
-			map.ground.color,
-			map.ground.material
-		)
+		local sx = (maxX - minX) + 700
+		local sz = (maxZ - minZ) + 700
+		-- Parts max out at 2048 studs, so big tracks get a grid of ground tiles.
+		local tilesX, tilesZ = math.ceil(sx / 2000), math.ceil(sz / 2000)
+		local tileX, tileZ = sx / tilesX, sz / tilesZ
+		for tx = 0, tilesX - 1 do
+			for tz = 0, tilesZ - 1 do
+				newPart(
+					model,
+					Vector3.new(tileX + 0.1, 4, tileZ + 0.1),
+					CFrame.new(cx - sx / 2 + tileX * (tx + 0.5), groundTop - 2, cz - sz / 2 + tileZ * (tz + 0.5)),
+					map.ground.color,
+					map.ground.material
+				)
+			end
+		end
 		if map.sea then
 			newPart(
 				model,
@@ -4515,19 +5770,19 @@ return TrackBuilder
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="22">
+  <Item class="StarterPlayer" referent="27">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="23">
+    <Item class="StarterPlayerScripts" referent="28">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="24">
+      <Item class="Folder" referent="29">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="ModuleScript" referent="25">
+        <Item class="ModuleScript" referent="30">
           <Properties>
             <string name="Name">CarController</string>
             <string name="Source"><![CDATA[-- Client-side arcade car physics (raycast suspension), input and chase
@@ -4559,7 +5814,7 @@ local function buildRayParams()
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Include
 	local list = {}
-	for _, name in { "Lobby", "ActiveTrack" } do
+	for _, name in { "Lobby", "Tracks" } do
 		local inst = workspace:FindFirstChild(name)
 		if inst then
 			table.insert(list, inst)
@@ -4892,7 +6147,7 @@ function CarController.Respawn()
 end
 
 function CarController.ExitCar()
-	if active and active.mode == "test" then
+	if active and (active.mode == "test" or active.mode == "free") then
 		State.Request("ExitCar")
 	end
 end
@@ -5008,7 +6263,7 @@ function CarController.Start(model, mode)
 		end
 		return Enum.ContextActionResult.Sink
 	end, false, Enum.KeyCode.V, Enum.KeyCode.ButtonR3)
-	if mode == "test" then
+	if mode == "test" or mode == "free" then
 		ContextActionService:BindAction("CarExit", function(_, inputState)
 			if inputState == Enum.UserInputState.Begin then
 				CarController.ExitCar()
@@ -5077,7 +6332,7 @@ return CarController
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="26">
+        <Item class="ModuleScript" referent="31">
           <Properties>
             <string name="Name">LightingController</string>
             <string name="Source"><![CDATA[-- Applies per-map lighting locally (racers see the track's time of day,
@@ -5125,7 +6380,7 @@ return LightingController
 ]]></string>
           </Properties>
         </Item>
-        <Item class="LocalScript" referent="27">
+        <Item class="LocalScript" referent="32">
           <Properties>
             <string name="Name">Main</string>
             <string name="Source"><![CDATA[-- Client entry point: builds the UI and wires server events.
@@ -5152,6 +6407,8 @@ local UpgradesPanel = require(UI.UpgradesPanel)
 local CustomizePanel = require(UI.CustomizePanel)
 local ShopPanel = require(UI.ShopPanel)
 local CodesPanel = require(UI.CodesPanel)
+local TeamPanel = require(UI.TeamPanel)
+local FreeDrivePanel = require(UI.FreeDrivePanel)
 local RaceHUD = require(UI.RaceHUD)
 local Results = require(UI.Results)
 local MobileControls = require(UI.MobileControls)
@@ -5177,6 +6434,8 @@ UpgradesPanel.Init(gui, HUD)
 CustomizePanel.Init(gui, HUD)
 ShopPanel.Init(gui, HUD)
 CodesPanel.Init(gui, HUD)
+TeamPanel.Init(gui, HUD)
+FreeDrivePanel.Init(gui, HUD)
 RaceHUD.Init(gui, HUD, player.UserId)
 Results.Init(gui, HUD, player.UserId)
 MobileControls.Init(gui, CarController)
@@ -5186,6 +6445,8 @@ HUD.RegisterPanel("Upgrades", UpgradesPanel)
 HUD.RegisterPanel("Customize", CustomizePanel)
 HUD.RegisterPanel("Shop", ShopPanel)
 HUD.RegisterPanel("Codes", CodesPanel)
+HUD.RegisterPanel("Teams", TeamPanel)
+HUD.RegisterPanel("FreeDrive", FreeDrivePanel)
 
 CarController.OnTelemetry = RaceHUD.SetTelemetry
 
@@ -5209,12 +6470,6 @@ Remotes.Event("Notify").OnClientEvent:Connect(Notify.Show)
 
 Remotes.Event("RaceState").OnClientEvent:Connect(function(payload)
 	State.race = payload
-	State.inRace = table.find(payload.participants or {}, player.UserId) ~= nil
-	if State.inRace and payload.mapId then
-		LightingController.SetMap(payload.mapId)
-	else
-		LightingController.SetMap(nil)
-	end
 	State.Fire("Race", payload)
 end)
 
@@ -5224,14 +6479,17 @@ Remotes.Event("CarAssigned").OnClientEvent:Connect(function(model, mode)
 	if not model then
 		return
 	end
-	if mode == "race" then
+	if mode == "race" or mode == "free" then
 		HUD.CloseAll()
 		Results.Hide()
 	end
+	-- Each track has its own time of day / weather; the lobby has its own.
+	LightingController.SetMap(model:GetAttribute("MapId"))
 	task.spawn(CarController.Start, model, mode)
 end)
 Remotes.Event("CarRemoved").OnClientEvent:Connect(function()
 	CarController.Stop()
+	LightingController.SetMap(nil)
 end)
 
 Remotes.Event("Countdown").OnClientEvent:Connect(RaceHUD.Countdown)
@@ -5273,15 +6531,24 @@ RunService.RenderStepped:Connect(function()
 end)
 
 ProximityPromptService.PromptTriggered:Connect(function(prompt)
+	if State.driving then
+		return
+	end
 	local carId = prompt:GetAttribute("CarId")
-	if carId and not State.driving then
+	local teamQueue = prompt:GetAttribute("TeamQueue")
+	local panel = prompt:GetAttribute("OpenPanel")
+	if carId then
 		HUD.OpenPanel("Garage", carId)
+	elseif teamQueue then
+		TeamPanel.Toggle(teamQueue)
+	elseif panel then
+		HUD.OpenPanel(panel)
 	end
 end)
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="28">
+        <Item class="ModuleScript" referent="33">
           <Properties>
             <string name="Name">State</string>
             <string name="Source"><![CDATA[-- Client-side shared state plus a tiny signal system.
@@ -5291,12 +6558,11 @@ local Remotes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("R
 
 local State = {
 	data = nil, -- profile view from the server
-	race = { phase = "Waiting", timeLeft = 0, votes = {}, participants = {} },
+	race = { phase = "Waiting", timeLeft = 0, votes = {}, typeVotes = {}, teamQueues = {}, freeDrive = {} },
 	queued = true,
 	myVote = nil,
 	driving = false,
 	driveMode = nil, -- "race" | "test"
-	inRace = false,
 }
 
 local listeners = {}
@@ -5334,11 +6600,11 @@ return State
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="29">
+        <Item class="Folder" referent="34">
           <Properties>
             <string name="Name">UI</string>
           </Properties>
-          <Item class="ModuleScript" referent="30">
+          <Item class="ModuleScript" referent="35">
             <Properties>
               <string name="Name">CodesPanel</string>
               <string name="Source"><![CDATA[-- Redeem promo codes.
@@ -5413,7 +6679,7 @@ return CodesPanel
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="31">
+          <Item class="ModuleScript" referent="36">
             <Properties>
               <string name="Name">CustomizePanel</string>
               <string name="Source"><![CDATA[-- Customise: paint, accent, rims, underglow and finish with a live preview.
@@ -5431,7 +6697,8 @@ local T = Util.Theme
 local CustomizePanel = {}
 
 local frame, viewport, carLabel
-local swatches = {} -- [category] = { [optionId] = { button, stroke, lock, option } }
+local swatches = {} -- [category] = { [optionId] = { button, stroke, lock, option, price } }
+local pendingBuy = {} -- [category .. id] = click time (buy confirmation)
 
 function CustomizePanel.Init(gui, hud)
 	local content
@@ -5472,9 +6739,10 @@ function CustomizePanel.Init(gui, hud)
 			AutomaticSize = Enum.AutomaticSize.Y,
 			LayoutOrder = i * 2,
 		})
-		local isText = category == "finish" or category == "glow"
+		local isItem = Customization.ItemCategories[category] == true
+		local isText = category == "finish" or category == "glow" or isItem
 		Util.new("UIGridLayout", {
-			CellSize = isText and UDim2.new(0, 110, 0, 38) or UDim2.new(0, 46, 0, 46),
+			CellSize = isItem and UDim2.new(0, 110, 0, 50) or isText and UDim2.new(0, 110, 0, 38) or UDim2.new(0, 46, 0, 46),
 			CellPadding = UDim2.new(0, 6, 0, 6),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 			Parent = grid,
@@ -5492,6 +6760,10 @@ function CustomizePanel.Init(gui, hud)
 				LayoutOrder = j,
 				Parent = grid,
 			})
+			if isItem then
+				button.BackgroundColor3 = option.color and option.color:Lerp(Color3.new(0, 0, 0), 0.45) or T.panel2
+				button.TextYAlignment = Enum.TextYAlignment.Top
+			end
 			if category == "glow" and option.id ~= "None" then
 				button.BackgroundColor3 = option.color:Lerp(Color3.new(0, 0, 0), 0.3)
 			end
@@ -5517,6 +6789,16 @@ function CustomizePanel.Init(gui, hud)
 				Visible = false,
 				ZIndex = 3,
 			})
+			local price
+			if option.price then
+				price = Util.label(button, "$" .. Util.formatNumber(option.price), {
+					AnchorPoint = Vector2.new(0.5, 1),
+					Position = UDim2.fromScale(0.5, 1),
+					Size = UDim2.fromScale(1, 0.42),
+					TextColor3 = T.gold,
+					ZIndex = 2,
+				})
+			end
 			button.Activated:Connect(function()
 				local data = State.data
 				if not data then
@@ -5527,12 +6809,34 @@ function CustomizePanel.Init(gui, hud)
 					Notify.Show(option.id .. ": " .. reason, "error")
 					return
 				end
+				if not Customization.Owns(data, category, option) then
+					-- First click previews the item; a second click within 4s buys it.
+					local key = category .. option.id
+					if pendingBuy[key] and os.clock() - pendingBuy[key] < 4 then
+						pendingBuy[key] = nil
+						local bought, msg = State.Request("BuyItem", category, option.id)
+						if not bought and msg then
+							Notify.Show(msg, "error")
+						end
+					else
+						table.clear(pendingBuy)
+						pendingBuy[key] = os.clock()
+						local preview = table.clone(data.custom[data.selectedCar] or Customization.Default(data.selectedCar))
+						preview[category] = option.id
+						viewport:SetCustom(preview)
+						Notify.Show(
+							string.format("Previewing %s. Click again to buy for %s coins.", option.id, Util.formatNumber(option.price)),
+							"info"
+						)
+					end
+					return
+				end
 				local success, msg = State.Request("Customize", data.selectedCar, category, option.id)
 				if not success and msg then
 					Notify.Show(msg, "error")
 				end
 			end)
-			swatches[category][option.id] = { button = button, stroke = stroke, lock = lock, option = option }
+			swatches[category][option.id] = { button = button, stroke = stroke, lock = lock, option = option, price = price }
 		end
 	end
 
@@ -5557,6 +6861,9 @@ function CustomizePanel.Refresh()
 		for optionId, entry in entries do
 			entry.stroke.Transparency = custom[category] == optionId and 0 or 1
 			entry.lock.Visible = not Customization.CanUse(entry.option, data.level, isVip)
+			if entry.price then
+				entry.price.Visible = not Customization.Owns(data, category, entry.option)
+			end
 		end
 	end
 end
@@ -5574,7 +6881,123 @@ return CustomizePanel
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="32">
+          <Item class="ModuleScript" referent="37">
+            <Properties>
+              <string name="Name">FreeDrivePanel</string>
+              <string name="Source"><![CDATA[-- Free drive: pick any circuit and cruise it.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Maps = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Maps"))
+local Util = require(script.Parent.Util)
+local Notify = require(script.Parent.Notify)
+local State = require(script.Parent.Parent.State)
+local T = Util.Theme
+
+local FreeDrivePanel = {}
+
+local frame
+local counts = {}
+local busy = false
+
+function FreeDrivePanel.Init(gui, hud)
+	local content
+	frame, content = Util.panel(gui, "FREE DRIVE", UDim2.fromOffset(720, 470), function()
+		hud.ClosePanel("FreeDrive")
+	end)
+	Util.label(content, "No timer, no opponents. Lap times are shown each time you cross the line. Press F / EXIT to leave.", {
+		Size = UDim2.new(1, 0, 0, 22),
+		TextColor3 = T.sub,
+		Font = Enum.Font.Gotham,
+	})
+	local grid = Util.frame(content, {
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 0, 0, 32),
+		Size = UDim2.new(1, 0, 1, -32),
+	})
+	Util.new("UIGridLayout", {
+		CellSize = UDim2.new(0.25, -8, 0, 150),
+		CellPadding = UDim2.new(0, 8, 0, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = grid,
+	})
+	for i, mapId in Maps.Order do
+		local map = Maps.List[mapId]
+		local card = Util.new("TextButton", {
+			AutoButtonColor = false,
+			Text = "",
+			BackgroundColor3 = T.panel,
+			LayoutOrder = i,
+			Parent = grid,
+		})
+		Util.corner(card, 12)
+		Util.stroke(card, map.cardColor, 2, 0.3)
+		Util.label(card, map.name, {
+			Position = UDim2.new(0, 8, 0, 10),
+			Size = UDim2.new(1, -16, 0, 40),
+			Font = Enum.Font.GothamBlack,
+			TextWrapped = true,
+			TextColor3 = map.cardColor,
+		})
+		Util.label(card, map.difficulty, {
+			Position = UDim2.new(0, 8, 0, 56),
+			Size = UDim2.new(1, -16, 0, 20),
+			TextColor3 = T.sub,
+		})
+		counts[mapId] = Util.label(card, "", {
+			Position = UDim2.new(0, 8, 0, 80),
+			Size = UDim2.new(1, -16, 0, 18),
+			TextColor3 = T.good,
+			Font = Enum.Font.Gotham,
+		})
+		local function onDrive()
+			if busy then
+				return
+			end
+			busy = true
+			hud.CloseAll()
+			Notify.Show("Loading " .. map.name .. "...", "info")
+			local ok, msg = State.Request("FreeDrive", mapId)
+			busy = false
+			if msg then
+				Notify.Show(msg, ok and "success" or "error")
+			end
+		end
+		Util.button(card, "DRIVE", T.good, {
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 1, -8),
+			Size = UDim2.new(1, -16, 0, 34),
+		}, onDrive)
+		card.Activated:Connect(onDrive)
+	end
+	State.On("Race", function()
+		if frame.Visible then
+			FreeDrivePanel.Refresh()
+		end
+	end)
+end
+
+function FreeDrivePanel.Refresh()
+	local live = State.race.freeDrive or {}
+	for mapId, label in counts do
+		local n = live[mapId] or 0
+		label.Text = n > 0 and string.format("%d driving now", n) or ""
+	end
+end
+
+function FreeDrivePanel.Open()
+	frame.Visible = true
+	FreeDrivePanel.Refresh()
+end
+
+function FreeDrivePanel.Close()
+	frame.Visible = false
+end
+
+return FreeDrivePanel
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="38">
             <Properties>
               <string name="Name">Garage</string>
               <string name="Source"><![CDATA[-- Garage: browse the five cars, buy with coins or Robux, select a car.
@@ -5845,7 +7268,7 @@ return Garage
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="33">
+          <Item class="ModuleScript" referent="39">
             <Properties>
               <string name="Name">HUD</string>
               <string name="Source"><![CDATA[-- Lobby HUD: coins / level / XP, menu buttons, race queue + test drive,
@@ -5855,6 +7278,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Maps = require(Shared.Maps)
+local RaceTypes = require(Shared.RaceTypes)
 local Util = require(script.Parent.Util)
 local State = require(script.Parent.Parent.State)
 local Notify = require(script.Parent.Notify)
@@ -5866,6 +7290,7 @@ local panels = {}
 local openName = nil
 local root, coinsLabel, levelLabel, xpFill, xpLabel, statusLabel, queueButton, driveButton
 local voteFrame, voteButtons = nil, {}
+local typeButtons = {}
 
 ---------------------------------------------------------------------------
 -- Panel management
@@ -5984,7 +7409,7 @@ function HUD.Init(gui)
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 12, 0.5, 20),
-		Size = UDim2.new(0, 170, 0, 5 * 54),
+		Size = UDim2.new(0, 170, 0, 7 * 54),
 	})
 	autoScale(menu)
 	Util.new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, Parent = menu })
@@ -5993,6 +7418,8 @@ function HUD.Init(gui)
 		{ "UPGRADES", "Upgrades", Color3.fromRGB(80, 110, 255) },
 		{ "CUSTOMIZE", "Customize", Color3.fromRGB(200, 60, 200) },
 		{ "SHOP", "Shop", T.robux },
+		{ "TEAM RACES", "Teams", Color3.fromRGB(235, 60, 60) },
+		{ "FREE DRIVE", "FreeDrive", Color3.fromRGB(40, 170, 90) },
 		{ "CODES", "Codes", Color3.fromRGB(90, 95, 115) },
 	}
 	for i, item in menuItems do
@@ -6059,23 +7486,55 @@ function HUD.Init(gui)
 	voteFrame = Util.frame(root, {
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -12, 0.5, 0),
-		Size = UDim2.new(0, 230, 0, 52 + #Maps.Order * 44),
+		Size = UDim2.new(0, 230, 0, 96 + #Maps.Order * 44),
 		BackgroundColor3 = T.bg,
 		BackgroundTransparency = 0.15,
 	})
 	Util.corner(voteFrame, 14)
 	Util.stroke(voteFrame, T.accent2, 1.5, 0.5)
 	autoScale(voteFrame)
-	Util.label(voteFrame, "MAP VOTE", {
+	Util.label(voteFrame, "VOTE: RACE TYPE + MAP", {
 		Size = UDim2.new(1, -20, 0, 26),
 		Position = UDim2.new(0, 10, 0, 10),
 		Font = Enum.Font.GothamBlack,
 		TextColor3 = T.accent2,
 	})
+	for i, typeId in RaceTypes.Order do
+		local info = RaceTypes.List[typeId]
+		local button = Util.button(voteFrame, "", T.panel2, {
+			Position = UDim2.new((i - 1) / 3, i == 1 and 10 or 3, 0, 44),
+			Size = UDim2.new(1 / 3, -13, 0, 38),
+		}, function()
+			local ok, msg = State.Request("VoteType", typeId)
+			if ok then
+				State.myTypeVote = typeId
+				HUD.RefreshVotes()
+				Notify.Show(info.name .. ": " .. info.description, "info")
+			elseif msg then
+				Notify.Show(msg, "error")
+			end
+		end)
+		local stripe = Util.frame(button, {
+			Size = UDim2.new(1, 0, 0, 3),
+			Position = UDim2.new(0, 0, 1, -3),
+			BackgroundColor3 = info.color,
+		})
+		Util.corner(stripe, 2)
+		local name = Util.label(button, string.upper(info.name), {
+			Size = UDim2.new(1, 0, 0.55, 0),
+			Font = Enum.Font.GothamBlack,
+		})
+		local count = Util.label(button, "0", {
+			Size = UDim2.new(1, 0, 0.4, 0),
+			Position = UDim2.new(0, 0, 0.55, 0),
+			TextColor3 = T.gold,
+		})
+		typeButtons[typeId] = { button = button, count = count, name = name }
+	end
 	for i, mapId in Maps.Order do
 		local map = Maps.List[mapId]
 		local button = Util.button(voteFrame, "", T.panel2, {
-			Position = UDim2.new(0, 10, 0, 44 + (i - 1) * 44),
+			Position = UDim2.new(0, 10, 0, 88 + (i - 1) * 44),
 			Size = UDim2.new(1, -20, 0, 38),
 		}, function()
 			local ok, msg = State.Request("Vote", mapId)
@@ -6160,9 +7619,11 @@ function HUD.RefreshDrive()
 	if not driveButton then
 		return
 	end
-	driveButton.Text = State.driving and "EXIT CAR (F)" or "TEST DRIVE"
+	driveButton.Text = State.driving and (State.driveMode == "free" and "EXIT FREE DRIVE" or "EXIT CAR (F)")
+		or "TEST DRIVE"
 	driveButton.BackgroundColor3 = State.driving and T.bad or T.accent
-	root.Visible = not (State.driving and State.driveMode == "race")
+	-- Racing or free driving: hide the lobby HUD (the race HUD takes over).
+	root.Visible = not (State.driving and (State.driveMode == "race" or State.driveMode == "free"))
 end
 
 function HUD.RefreshStatus()
@@ -6171,6 +7632,9 @@ function HUD.RefreshStatus()
 		return
 	end
 	local mapName = race.mapId and Maps.List[race.mapId] and Maps.List[race.mapId].name or ""
+	if race.raceType and RaceTypes.List[race.raceType] then
+		mapName = RaceTypes.List[race.raceType].name .. " on " .. mapName
+	end
 	local text
 	if race.phase == "Waiting" then
 		text = "Waiting for racers — turn on the race queue!"
@@ -6181,7 +7645,7 @@ function HUD.RefreshStatus()
 	elseif race.phase == "Countdown" then
 		text = mapName .. " is starting!"
 	elseif race.phase == "Racing" then
-		text = string.format("Race on %s  •  %d:%02d left", mapName, race.timeLeft // 60, race.timeLeft % 60)
+		text = string.format("%s  •  %d:%02d left", mapName, race.timeLeft // 60, race.timeLeft % 60)
 	elseif race.phase == "Results" then
 		text = "Race finished! Next round soon..."
 	else
@@ -6199,6 +7663,11 @@ function HUD.RefreshVotes()
 	voteFrame.Visible = open and State.queued
 	if not open then
 		State.myVote = nil
+		State.myTypeVote = nil
+	end
+	for typeId, entry in typeButtons do
+		entry.count.Text = tostring((race.typeVotes or {})[typeId] or 0)
+		entry.button.BackgroundColor3 = State.myTypeVote == typeId and Color3.fromRGB(0, 120, 160) or T.panel2
 	end
 	for mapId, entry in voteButtons do
 		entry.count.Text = tostring((race.votes or {})[mapId] or 0)
@@ -6211,7 +7680,7 @@ return HUD
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="34">
+          <Item class="ModuleScript" referent="40">
             <Properties>
               <string name="Name">MobileControls</string>
               <string name="Source"><![CDATA[-- On-screen driving buttons for touch devices.
@@ -6313,14 +7782,14 @@ end
 
 function MobileControls.SetVisible(visible, mode)
 	root.Visible = visible and UserInputService.TouchEnabled
-	exitButton.Visible = mode == "test"
+	exitButton.Visible = mode == "test" or mode == "free"
 end
 
 return MobileControls
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="35">
+          <Item class="ModuleScript" referent="41">
             <Properties>
               <string name="Name">Notify</string>
               <string name="Source"><![CDATA[-- Toast notifications.
@@ -6403,7 +7872,7 @@ return Notify
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="36">
+          <Item class="ModuleScript" referent="42">
             <Properties>
               <string name="Name">RaceHUD</string>
               <string name="Source"><![CDATA[-- In-car HUD: countdown, position, lap, timer, standings, speedometer,
@@ -6414,6 +7883,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
+local RaceTypes = require(Shared.RaceTypes)
 local Util = require(script.Parent.Util)
 local T = Util.Theme
 
@@ -6423,6 +7893,7 @@ local root, raceInfo, countdownLabel, bannerLabel
 local positionLabel, totalLabel, lapLabel, timeLabel
 local standingsFrame, standingRows = nil, {}
 local speedLabel, nitroFill, hints
+local typeLabel, teamBar, redLabel, blueLabel
 local mode = nil
 local localUserId
 
@@ -6492,6 +7963,33 @@ function RaceHUD.Init(gui, hud, userId)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = T.accent2,
 	})
+
+	-- Race type + team score (top centre) --------------------------------------------
+	typeLabel = Util.label(root, "", {
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 8),
+		Size = UDim2.new(0, 360, 0, 26),
+		Font = Enum.Font.GothamBlack,
+		TextStrokeTransparency = 0.4,
+	})
+	teamBar = Util.frame(root, {
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 38),
+		Size = UDim2.new(0, 300, 0, 34),
+		BackgroundTransparency = 1,
+		Visible = false,
+	})
+	hud.AutoScale(teamBar)
+	local red = Util.frame(teamBar, { Size = UDim2.new(0.5, -3, 1, 0), BackgroundColor3 = Config.Teams.Red.color })
+	Util.corner(red, 8)
+	redLabel = Util.label(red, "RED 0", { Size = UDim2.new(1, -12, 1, -8), Position = UDim2.new(0, 6, 0, 4), Font = Enum.Font.GothamBlack })
+	local blue = Util.frame(teamBar, {
+		Position = UDim2.new(0.5, 3, 0, 0),
+		Size = UDim2.new(0.5, -3, 1, 0),
+		BackgroundColor3 = Config.Teams.Blue.color,
+	})
+	Util.corner(blue, 8)
+	blueLabel = Util.label(blue, "0 BLUE", { Size = UDim2.new(1, -12, 1, -8), Position = UDim2.new(0, 6, 0, 4), Font = Enum.Font.GothamBlack })
 
 	-- Standings (left) -----------------------------------------------------------------
 	standingsFrame = Util.frame(root, {
@@ -6564,9 +8062,17 @@ function RaceHUD.Show(newMode)
 	local racing = mode == "race"
 	raceInfo.Visible = racing
 	standingsFrame.Visible = racing
+	teamBar.Visible = false
 	hints.Visible = not UserInputService.TouchEnabled
-	hints.Text = racing and "W/S drive • A/D steer • SPACE drift • SHIFT nitro • R respawn • V camera • C look back"
-		or "W/S drive • A/D steer • SPACE drift • SHIFT nitro • R reset • F exit car"
+	if racing then
+		hints.Text = "W/S drive • A/D steer • SPACE drift • SHIFT nitro • R respawn • V camera • C look back"
+	elseif mode == "free" then
+		hints.Text = "FREE DRIVE • W/S drive • A/D steer • SPACE drift • SHIFT nitro • R respawn • F leave"
+	else
+		hints.Text = "W/S drive • A/D steer • SPACE drift • SHIFT nitro • R reset • F exit car"
+	end
+	typeLabel.Text = mode == "free" and "FREE DRIVE" or ""
+	typeLabel.TextColor3 = RaceTypes.List.FreeDrive.color
 	speedLabel.Text = "0"
 end
 
@@ -6610,14 +8116,32 @@ function RaceHUD.Update(info)
 	end
 	positionLabel.Text = Util.ordinal(info.position)
 	totalLabel.Text = "/ " .. info.total
-	lapLabel.Text = string.format("LAP %d/%d", info.lap, info.laps)
+	lapLabel.Text = info.laps == 1 and "SPRINT" or string.format("LAP %d/%d", info.lap, info.laps)
 	timeLabel.Text = Util.formatTime(info.elapsed)
+	local typeInfo = RaceTypes.List[info.raceType]
+	if typeInfo then
+		typeLabel.Text = string.upper(typeInfo.name) .. (info.label and ("  •  " .. info.label) or "")
+		typeLabel.TextColor3 = typeInfo.color
+	end
+	if info.teamScores then
+		teamBar.Visible = true
+		redLabel.Text = "RED " .. info.teamScores.Red
+		blueLabel.Text = info.teamScores.Blue .. " BLUE"
+	else
+		teamBar.Visible = false
+	end
 	for i, row in standingRows do
 		local entry = info.standings[i]
 		if entry then
-			local suffix = entry.finished and "  FIN" or (entry.dnf and "  DNF" or "")
+			local suffix = entry.finished and "  FIN" or entry.eliminated and "  OUT" or (entry.dnf and "  DNF" or "")
 			row.Text = string.format("%d. %s%s", i, entry.name, suffix)
-			row.TextColor3 = entry.userId == localUserId and T.gold or T.text
+			if entry.userId == localUserId then
+				row.TextColor3 = T.gold
+			elseif entry.team and Config.Teams[entry.team] then
+				row.TextColor3 = Config.Teams[entry.team].color
+			else
+				row.TextColor3 = T.text
+			end
 		else
 			row.Text = ""
 		end
@@ -6625,6 +8149,16 @@ function RaceHUD.Update(info)
 end
 
 function RaceHUD.OnCheckpoint(info)
+	if info.freeLap then
+		RaceHUD.Banner((info.best and "BEST LAP  " or "LAP  ") .. Util.formatTime(info.freeLap), info.best and T.good or T.accent2, 3)
+		playBeep(1.3)
+		return
+	end
+	if info.eliminated then
+		RaceHUD.Banner("ELIMINATED! You finished " .. Util.ordinal(info.place), T.bad, 4)
+		playBeep(0.7)
+		return
+	end
 	if info.finished then
 		RaceHUD.Banner("FINISHED " .. Util.ordinal(info.place) .. "!  " .. Util.formatTime(info.time), T.gold, 5)
 		playBeep(2)
@@ -6653,7 +8187,7 @@ return RaceHUD
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="37">
+          <Item class="ModuleScript" referent="43">
             <Properties>
               <string name="Name">Results</string>
               <string name="Source"><![CDATA[-- End-of-race results screen.
@@ -6662,6 +8196,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Maps = require(Shared.Maps)
+local RaceTypes = require(Shared.RaceTypes)
 local Util = require(script.Parent.Util)
 local T = Util.Theme
 
@@ -6708,7 +8243,21 @@ function Results.Show(payload)
 		end
 	end
 	local map = Maps.List[payload.mapId]
-	subtitle.Text = map and string.upper(map.name) or ""
+	local typeInfo = RaceTypes.List[payload.raceType]
+	local heading = (typeInfo and string.upper(typeInfo.name) .. "  •  " or "") .. (map and string.upper(map.name) or "")
+	subtitle.TextColor3 = T.accent
+	if payload.teams then
+		local winner = Config.Teams[payload.teams.winner]
+		heading = string.format(
+			"%s TEAM WINS  %d - %d  •  %s",
+			winner.name,
+			payload.teams[payload.teams.winner],
+			payload.teams[payload.teams.winner == "Red" and "Blue" or "Red"],
+			payload.label or ""
+		)
+		subtitle.TextColor3 = winner.color
+	end
+	subtitle.Text = heading
 	rewardLabel.Text = ""
 
 	for i, entry in payload.results do
@@ -6720,6 +8269,13 @@ function Results.Show(payload)
 		})
 		Util.corner(row, 8)
 		local place = entry.place and Util.ordinal(entry.place) or "DNF"
+		if entry.team and Config.Teams[entry.team] then
+			local stripe = Util.frame(row, {
+				Size = UDim2.new(0, 5, 1, 0),
+				BackgroundColor3 = Config.Teams[entry.team].color,
+			})
+			Util.corner(stripe, 3)
+		end
 		Util.label(row, place, {
 			Position = UDim2.new(0, 10, 0, 6),
 			Size = UDim2.new(0, 60, 0, 28),
@@ -6731,7 +8287,7 @@ function Results.Show(payload)
 			Size = UDim2.new(0.45, 0, 0, 24),
 			TextXAlignment = Enum.TextXAlignment.Left,
 		})
-		Util.label(row, Util.formatTime(entry.time) .. (entry.newBest and "  PB!" or ""), {
+		Util.label(row, entry.eliminated and "ELIMINATED" or (Util.formatTime(entry.time) .. (entry.newBest and "  PB!" or "")), {
 			Position = UDim2.new(0.55, 0, 0, 8),
 			Size = UDim2.new(0.22, 0, 0, 24),
 			TextColor3 = entry.newBest and T.good or T.accent2,
@@ -6781,7 +8337,7 @@ return Results
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="38">
+          <Item class="ModuleScript" referent="44">
             <Properties>
               <string name="Name">ShopPanel</string>
               <string name="Source"><![CDATA[-- Robux shop: coin packs, game passes and upgrade boosts.
@@ -6989,7 +8545,126 @@ return ShopPanel
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="39">
+          <Item class="ModuleScript" referent="45">
+            <Properties>
+              <string name="Name">TeamPanel</string>
+              <string name="Source"><![CDATA[-- Team races: queue for 1v1 up to 5v5 (same as the Team Arena pads).
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Util = require(script.Parent.Util)
+local Notify = require(script.Parent.Notify)
+local State = require(script.Parent.Parent.State)
+local T = Util.Theme
+
+local TeamPanel = {}
+
+local frame
+local rows = {}
+local localUserId = Players.LocalPlayer.UserId
+
+-- Size of the team queue the local player is in (from the lobby broadcast).
+function TeamPanel.MyQueue()
+	for _, q in State.race.teamQueues or {} do
+		if table.find(q.members, localUserId) then
+			return q.size
+		end
+	end
+	return nil
+end
+
+function TeamPanel.Toggle(size)
+	local ok, msg
+	if TeamPanel.MyQueue() == size then
+		ok, msg = State.Request("LeaveTeamQueue")
+	else
+		ok, msg = State.Request("JoinTeamQueue", size)
+	end
+	if msg then
+		Notify.Show(msg, ok and "success" or "error")
+	end
+end
+
+function TeamPanel.Init(gui, hud)
+	local content
+	frame, content = Util.panel(gui, "TEAM RACES", UDim2.fromOffset(620, 470), function()
+		hud.ClosePanel("Teams")
+	end)
+	Util.label(content, "RED vs BLUE. Points by finishing place (25, 18, 15...). Winning team gets bonus coins and XP.", {
+		Size = UDim2.new(1, 0, 0, 36),
+		TextColor3 = T.sub,
+		Font = Enum.Font.Gotham,
+		TextWrapped = true,
+	})
+	for i, size in Config.TeamSizes do
+		local row = Util.frame(content, {
+			Position = UDim2.new(0, 0, 0, 46 + (i - 1) * 64),
+			Size = UDim2.new(1, 0, 0, 56),
+			BackgroundColor3 = T.panel,
+		})
+		Util.corner(row, 10)
+		Util.label(row, string.format("%dv%d", size, size), {
+			Position = UDim2.new(0, 14, 0, 8),
+			Size = UDim2.new(0, 90, 0, 40),
+			Font = Enum.Font.GothamBlack,
+			TextXAlignment = Enum.TextXAlignment.Left,
+		})
+		local count = Util.label(row, "", {
+			Position = UDim2.new(0, 110, 0, 14),
+			Size = UDim2.new(0.4, 0, 0, 28),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextColor3 = T.gold,
+		})
+		local button = Util.button(row, "JOIN", T.good, {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -10, 0.5, 0),
+			Size = UDim2.new(0, 150, 0, 40),
+		}, function()
+			TeamPanel.Toggle(size)
+		end)
+		rows[size] = { count = count, button = button }
+	end
+	Util.label(content, "Tip: you can free drive while you wait. You'll be pulled into the match when it's ready.", {
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 0, 1, 0),
+		Size = UDim2.new(1, 0, 0, 20),
+		TextColor3 = T.sub,
+		Font = Enum.Font.Gotham,
+	})
+	State.On("Race", function()
+		if frame.Visible then
+			TeamPanel.Refresh()
+		end
+	end)
+end
+
+function TeamPanel.Refresh()
+	local mine = TeamPanel.MyQueue()
+	for _, q in State.race.teamQueues or {} do
+		local row = rows[q.size]
+		if row then
+			row.count.Text = string.format("%d / %d players queued", q.count, q.needed)
+			row.button.Text = mine == q.size and "LEAVE QUEUE" or "JOIN"
+			row.button.BackgroundColor3 = mine == q.size and T.bad or T.good
+		end
+	end
+end
+
+function TeamPanel.Open()
+	frame.Visible = true
+	TeamPanel.Refresh()
+end
+
+function TeamPanel.Close()
+	frame.Visible = false
+end
+
+return TeamPanel
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="46">
             <Properties>
               <string name="Name">UpgradesPanel</string>
               <string name="Source"><![CDATA[-- Upgrades: spend coins (or Robux) on the selected car's performance.
@@ -7154,7 +8829,7 @@ return UpgradesPanel
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="40">
+          <Item class="ModuleScript" referent="47">
             <Properties>
               <string name="Name">Util</string>
               <string name="Source"><![CDATA[-- UI construction helpers and theme.
@@ -7374,7 +9049,7 @@ return Util
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="41">
+          <Item class="ModuleScript" referent="48">
             <Properties>
               <string name="Name">Viewport</string>
               <string name="Source"><![CDATA[-- Rotating 3D car preview inside a ViewportFrame.
@@ -7485,7 +9160,7 @@ return Viewport
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="42">
+  <Item class="Workspace" referent="49">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>

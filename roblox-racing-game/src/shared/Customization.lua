@@ -4,7 +4,10 @@ local Cars = require(script.Parent.Cars)
 
 local Customization = {}
 
-Customization.Categories = { "paint", "accent", "rim", "glow", "finish" }
+Customization.Categories = { "paint", "accent", "rim", "glow", "finish", "wings", "eyes", "trail" }
+
+-- Cosmetic items bought once with coins, then free to equip on any car.
+Customization.ItemCategories = { wings = true, eyes = true, trail = true }
 
 Customization.CategoryNames = {
 	paint = "Body Paint",
@@ -12,6 +15,9 @@ Customization.CategoryNames = {
 	rim = "Rims",
 	glow = "Underglow",
 	finish = "Paint Finish",
+	wings = "Wings (shop item)",
+	eyes = "Eyes (shop item)",
+	trail = "Trail (shop item)",
 }
 
 local paints = {
@@ -66,13 +72,63 @@ local finishes = {
 	{ id = "Neon", material = Enum.Material.Neon, reflectance = 0, vip = true },
 }
 
+local wings = {
+	{ id = "None" },
+	{ id = "Angel", price = 4000, color = Color3.fromRGB(245, 245, 250) },
+	{ id = "Bat", price = 4000, color = Color3.fromRGB(35, 30, 40) },
+	{ id = "Butterfly", price = 6000, color = Color3.fromRGB(240, 110, 200) },
+	{ id = "Dragon", price = 7500, color = Color3.fromRGB(170, 25, 25) },
+	{ id = "Jet", price = 9000, color = Color3.fromRGB(150, 155, 165) },
+}
+
+local eyes = {
+	{ id = "None" },
+	{ id = "Cute", price = 1500, color = Color3.fromRGB(255, 255, 255) },
+	{ id = "Angry", price = 2500, color = Color3.fromRGB(255, 90, 60) },
+	{ id = "Lashes", price = 2500, color = Color3.fromRGB(255, 150, 210) },
+	{ id = "Love", price = 4000, color = Color3.fromRGB(255, 60, 150) },
+	{ id = "Robot", price = 6000, color = Color3.fromRGB(0, 230, 255) },
+}
+
+-- Trails are a flat ribbon just above the road behind the car, so they
+-- never block the view of whoever is following.
+local trails = {
+	{ id = "None" },
+	{ id = "Blue Streak", price = 1500, color = Color3.fromRGB(40, 140, 255) },
+	{ id = "Fire", price = 3000, color = Color3.fromRGB(255, 110, 20), color2 = Color3.fromRGB(255, 30, 0) },
+	{ id = "Ice", price = 3000, color = Color3.fromRGB(170, 240, 255), color2 = Color3.fromRGB(40, 150, 255) },
+	{ id = "Toxic", price = 3000, color = Color3.fromRGB(120, 255, 60), color2 = Color3.fromRGB(20, 160, 40) },
+	{ id = "Gold", price = 6000, color = Color3.fromRGB(255, 215, 60), color2 = Color3.fromRGB(255, 160, 20) },
+	{ id = "Rainbow", price = 10000, color = Color3.fromRGB(255, 60, 60), rainbow = true },
+}
+
 Customization.Options = {
 	paint = paints,
 	accent = paints,
 	rim = rims,
 	glow = glows,
 	finish = finishes,
+	wings = wings,
+	eyes = eyes,
+	trail = trails,
 }
+
+-- Key used in the player's saved `items` table.
+function Customization.ItemKey(category, id)
+	return category .. ":" .. id
+end
+
+-- Whether the player may equip this option: free options always, shop
+-- items once bought (admins own everything).
+function Customization.Owns(data, category, option)
+	if not option.price then
+		return true
+	end
+	if data.admin then
+		return true
+	end
+	return data.items ~= nil and data.items[Customization.ItemKey(category, option.id)] == true
+end
 
 function Customization.Find(category, id)
 	local list = Customization.Options[category]
@@ -105,6 +161,9 @@ function Customization.Default(carId)
 		rim = "Silver",
 		glow = "None",
 		finish = "Glossy",
+		wings = "None",
+		eyes = "None",
+		trail = "None",
 	}
 	for key, value in (car and car.defaultCustom) or {} do
 		custom[key] = value

@@ -214,6 +214,7 @@ function CarBuilder.Build(carId, custom, display)
 	local model = Instance.new("Model")
 	model.Name = car.name
 	model:SetAttribute("CarId", car.id)
+	model:SetAttribute("Display", display == true)
 
 	local L, W, H, bottom = b.length, b.width, b.height, b.bottom
 	local h1 = H - b.noseDrop
@@ -705,8 +706,207 @@ function CarBuilder.Build(carId, custom, display)
 	return model
 end
 
+---------------------------------------------------------------------------
+-- Cosmetic items: eyes, wings, trails
+---------------------------------------------------------------------------
+local WING_STYLES = {
+	Angel = { feathers = 5, len = 3.4, grow = 0.6, width = 1.1, angle0 = 18, step = 9 },
+	Bat = { feathers = 4, len = 4.6, grow = 0.2, width = 0.9, angle0 = 6, step = 13 },
+	Butterfly = { feathers = 2, len = 3.8, grow = -0.6, width = 2.6, angle0 = 35, step = -25, material = Enum.Material.Neon },
+	Dragon = { feathers = 4, len = 5.2, grow = 0.4, width = 1.2, angle0 = 12, step = 12 },
+	Jet = { feathers = 1, len = 5.5, grow = 0, width = 2.6, angle0 = 4, step = 0, material = Enum.Material.Metal },
+}
+
+local RAINBOW = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 50, 50)),
+	ColorSequenceKeypoint.new(0.2, Color3.fromRGB(255, 160, 30)),
+	ColorSequenceKeypoint.new(0.4, Color3.fromRGB(255, 240, 40)),
+	ColorSequenceKeypoint.new(0.6, Color3.fromRGB(50, 220, 80)),
+	ColorSequenceKeypoint.new(0.8, Color3.fromRGB(40, 140, 255)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(170, 60, 255)),
+})
+
+-- Where cosmetics attach, in car space.
+local function cosmeticAnchors(car)
+	local b = car.body
+	if b.style == "burger" then
+		return {
+			eyes = Vector3.new(0, 4.9, -4.6),
+			eyeSpacing = 1.8,
+			eyeScale = 1.15,
+			wing = Vector3.new(6.2, 2.6, 0),
+			trailX = 2.6,
+			trailZ = b.length / 2,
+		}
+	end
+	local h1 = b.height - b.noseDrop
+	return {
+		-- Eyes sit on the very front of the nose, like big headlights.
+		eyes = Vector3.new(0, b.bottom + h1 + 0.55, -b.length / 2 + 1.2),
+		eyeSpacing = b.width * 0.22,
+		eyeScale = 1,
+		wing = Vector3.new(b.width / 2 - 0.2, b.bottom + b.height + 0.1, b.cabin.z),
+		trailX = b.width * 0.3,
+		trailZ = b.length / 2,
+	}
+end
+
+local function ball(parent, name, diameter, cframe, color, material)
+	local part = make(parent, "Part", name, Vector3.new(diameter, diameter, diameter), cframe, color, material)
+	part.Shape = Enum.PartType.Ball
+	return part
+end
+
+local function buildEyes(folder, base, anchors, option)
+	local s = anchors.eyeScale
+	local style = option.id
+	if style == "Robot" then
+		make(
+			folder,
+			"Part",
+			"Visor",
+			Vector3.new(anchors.eyeSpacing * 2 + 1.8 * s, 0.55 * s, 0.4),
+			base * CFrame.new(0, 0, -0.3),
+			option.color,
+			Enum.Material.Neon
+		)
+		return
+	end
+	local white = Color3.new(1, 1, 1)
+	local black = Color3.fromRGB(15, 15, 18)
+	local size = (style == "Cute" and 1.9 or 1.6) * s
+	for _, side in { -1, 1 } do
+		local center = base * CFrame.new(side * anchors.eyeSpacing, 0, 0)
+		ball(folder, "Eye", size, center, white)
+		if style == "Love" then
+			ball(folder, "Pupil", size * 0.55, center * CFrame.new(0, 0, -size * 0.34), option.color, Enum.Material.Neon)
+		else
+			ball(folder, "Pupil", size * 0.48, center * CFrame.new(0, -0.05, -size * 0.36), black)
+		end
+		if style == "Cute" then
+			ball(folder, "Shine", size * 0.15, center * CFrame.new(size * 0.12, size * 0.16, -size * 0.5), white, Enum.Material.Neon)
+		elseif style == "Angry" then
+			make(
+				folder,
+				"Part",
+				"Brow",
+				Vector3.new(size * 1.05, 0.3, 0.35),
+				center * CFrame.new(0, size * 0.58, -size * 0.25) * CFrame.Angles(0, 0, side * 0.4),
+				black
+			)
+		elseif style == "Lashes" then
+			for k = -1, 1 do
+				make(
+					folder,
+					"Part",
+					"Lash",
+					Vector3.new(0.12, size * 0.45, 0.12),
+					center * CFrame.new(k * size * 0.28, size * 0.55, -size * 0.2) * CFrame.Angles(0, 0, -k * 0.5),
+					black
+				)
+			end
+		end
+	end
+end
+
+local function buildWings(folder, chassisCF, anchors, option)
+	local st = WING_STYLES[option.id]
+	if not st then
+		return
+	end
+	for _, side in { -1, 1 } do
+		for k = 0, st.feathers - 1 do
+			local len = st.len + k * st.grow
+			local angle = math.rad(st.angle0 + k * st.step)
+			local zOff = (k - (st.feathers - 1) / 2) * st.width * 0.85
+			make(
+				folder,
+				"Part",
+				"Wing",
+				Vector3.new(len, 0.18, st.width),
+				chassisCF
+					* CFrame.new(side * anchors.wing.X, anchors.wing.Y, anchors.wing.Z + zOff)
+					* CFrame.Angles(0, 0, side * angle)
+					* CFrame.new(side * len / 2, 0, 0),
+				option.color,
+				st.material
+			)
+		end
+	end
+end
+
+local function buildTrail(chassis, anchors, option)
+	local a0 = Instance.new("Attachment")
+	a0.Name = "TrailA0"
+	a0.Position = Vector3.new(-anchors.trailX, -2.1, anchors.trailZ)
+	a0.Parent = chassis
+	local a1 = Instance.new("Attachment")
+	a1.Name = "TrailA1"
+	a1.Position = Vector3.new(anchors.trailX, -2.1, anchors.trailZ)
+	a1.Parent = chassis
+	local trail = Instance.new("Trail")
+	trail.Name = "CosmeticTrail"
+	trail.Attachment0 = a0
+	trail.Attachment1 = a1
+	trail.FaceCamera = false -- flat ribbon on the road, never a wall
+	trail.Lifetime = 0.8
+	trail.MinLength = 0.2
+	trail.LightEmission = 0.7
+	trail.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.2),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	trail.Color = option.rainbow and RAINBOW or ColorSequence.new(option.color, option.color2 or option.color)
+	trail.Parent = chassis
+end
+
+function CarBuilder.ApplyCosmetics(model, custom)
+	local chassis = model.PrimaryPart
+	local car = Cars.List[model:GetAttribute("CarId")]
+	if not chassis or not car then
+		return
+	end
+	local old = model:FindFirstChild("Cosmetics")
+	if old then
+		old:Destroy()
+	end
+	for _, name in { "TrailA0", "TrailA1", "CosmeticTrail" } do
+		local inst = chassis:FindFirstChild(name)
+		if inst then
+			inst:Destroy()
+		end
+	end
+
+	local folder = Instance.new("Folder")
+	folder.Name = "Cosmetics"
+	folder.Parent = model
+	local anchors = cosmeticAnchors(car)
+	local chassisCF = chassis.CFrame
+	local eyes = Customization.Find("eyes", custom.eyes)
+	if eyes and eyes.id ~= "None" then
+		buildEyes(folder, chassisCF * CFrame.new(anchors.eyes), anchors, eyes)
+	end
+	local wings = Customization.Find("wings", custom.wings)
+	if wings and wings.id ~= "None" then
+		buildWings(folder, chassisCF, anchors, wings)
+	end
+	local display = model:GetAttribute("Display") == true
+	local trail = Customization.Find("trail", custom.trail)
+	if trail and trail.id ~= "None" and not display then
+		buildTrail(chassis, anchors, trail)
+	end
+	if display then
+		for _, part in folder:GetDescendants() do
+			if part:IsA("BasePart") then
+				part.Anchored = true
+			end
+		end
+	end
+end
+
 function CarBuilder.ApplyCustomization(model, custom)
 	custom = custom or {}
+	CarBuilder.ApplyCosmetics(model, custom)
 	local paint = Customization.Find("paint", custom.paint) or Customization.Options.paint[1]
 	local accent = Customization.Find("accent", custom.accent) or Customization.Find("accent", "Jet Black")
 	local rim = Customization.Find("rim", custom.rim) or Customization.Options.rim[1]

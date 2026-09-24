@@ -8,6 +8,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local CarBuilder = require(Shared.CarBuilder)
 local Upgrades = require(Shared.Upgrades)
 local Remotes = require(Shared.Remotes)
+local Config = require(Shared.Config)
 
 local DataService = require(script.Parent.DataService)
 
@@ -53,8 +54,9 @@ function CarService.Despawn(player)
 	rec.model:Destroy()
 end
 
--- mode: "race" | "test". Anchored cars are frozen (race countdown).
-function CarService.Spawn(player, cframe, mode, anchored, extraAttributes)
+-- mode: "race" | "test" | "free". Anchored cars are frozen (race countdown).
+-- onExit: called when a test / free-drive driver jumps out (default: despawn).
+function CarService.Spawn(player, cframe, mode, anchored, extraAttributes, onExit)
 	CarService.Despawn(player)
 	local data = DataService.Get(player)
 	local character = player.Character
@@ -88,7 +90,8 @@ function CarService.Spawn(player, cframe, mode, anchored, extraAttributes)
 	label.BackgroundTransparency = 1
 	label.Font = Enum.Font.GothamBold
 	label.TextScaled = true
-	label.TextColor3 = Color3.new(1, 1, 1)
+	local team = extraAttributes and extraAttributes.Team
+	label.TextColor3 = team and Config.Teams[team].color or Color3.new(1, 1, 1)
 	label.TextStrokeTransparency = 0.4
 	label.Text = player.DisplayName
 	label.Parent = tag
@@ -117,11 +120,15 @@ function CarService.Spawn(player, cframe, mode, anchored, extraAttributes)
 			if rec.cleaning or active[player] ~= rec or seat.Occupant ~= nil then
 				return
 			end
-			if mode == "test" then
-				-- Jumped out of a test drive: remove the car.
+			if mode == "test" or mode == "free" then
+				-- Jumped out of a test / free drive: remove the car.
 				task.defer(function()
 					if active[player] == rec then
-						CarService.Despawn(player)
+						if onExit then
+							onExit()
+						else
+							CarService.Despawn(player)
+						end
 					end
 				end)
 			else

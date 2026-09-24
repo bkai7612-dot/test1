@@ -13,7 +13,8 @@ local T = Util.Theme
 local CustomizePanel = {}
 
 local frame, viewport, carLabel
-local swatches = {} -- [category] = { [optionId] = { button, stroke, lock, option } }
+local swatches = {} -- [category] = { [optionId] = { button, stroke, lock, option, price } }
+local pendingBuy = {} -- [category .. id] = click time (buy confirmation)
 
 function CustomizePanel.Init(gui, hud)
 	local content
@@ -54,9 +55,10 @@ function CustomizePanel.Init(gui, hud)
 			AutomaticSize = Enum.AutomaticSize.Y,
 			LayoutOrder = i * 2,
 		})
-		local isText = category == "finish" or category == "glow"
+		local isItem = Customization.ItemCategories[category] == true
+		local isText = category == "finish" or category == "glow" or isItem
 		Util.new("UIGridLayout", {
-			CellSize = isText and UDim2.new(0, 110, 0, 38) or UDim2.new(0, 46, 0, 46),
+			CellSize = isItem and UDim2.new(0, 110, 0, 50) or isText and UDim2.new(0, 110, 0, 38) or UDim2.new(0, 46, 0, 46),
 			CellPadding = UDim2.new(0, 6, 0, 6),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 			Parent = grid,
@@ -74,6 +76,10 @@ function CustomizePanel.Init(gui, hud)
 				LayoutOrder = j,
 				Parent = grid,
 			})
+			if isItem then
+				button.BackgroundColor3 = option.color and option.color:Lerp(Color3.new(0, 0, 0), 0.45) or T.panel2
+				button.TextYAlignment = Enum.TextYAlignment.Top
+			end
 			if category == "glow" and option.id ~= "None" then
 				button.BackgroundColor3 = option.color:Lerp(Color3.new(0, 0, 0), 0.3)
 			end
@@ -99,6 +105,16 @@ function CustomizePanel.Init(gui, hud)
 				Visible = false,
 				ZIndex = 3,
 			})
+			local price
+			if option.price then
+				price = Util.label(button, "$" .. Util.formatNumber(option.price), {
+					AnchorPoint = Vector2.new(0.5, 1),
+					Position = UDim2.fromScale(0.5, 1),
+					Size = UDim2.fromScale(1, 0.42),
+					TextColor3 = T.gold,
+					ZIndex = 2,
+				})
+			end
 			button.Activated:Connect(function()
 				local data = State.data
 				if not data then
@@ -109,12 +125,34 @@ function CustomizePanel.Init(gui, hud)
 					Notify.Show(option.id .. ": " .. reason, "error")
 					return
 				end
+				if not Customization.Owns(data, category, option) then
+					-- First click previews the item; a second click within 4s buys it.
+					local key = category .. option.id
+					if pendingBuy[key] and os.clock() - pendingBuy[key] < 4 then
+						pendingBuy[key] = nil
+						local bought, msg = State.Request("BuyItem", category, option.id)
+						if not bought and msg then
+							Notify.Show(msg, "error")
+						end
+					else
+						table.clear(pendingBuy)
+						pendingBuy[key] = os.clock()
+						local preview = table.clone(data.custom[data.selectedCar] or Customization.Default(data.selectedCar))
+						preview[category] = option.id
+						viewport:SetCustom(preview)
+						Notify.Show(
+							string.format("Previewing %s. Click again to buy for %s coins.", option.id, Util.formatNumber(option.price)),
+							"info"
+						)
+					end
+					return
+				end
 				local success, msg = State.Request("Customize", data.selectedCar, category, option.id)
 				if not success and msg then
 					Notify.Show(msg, "error")
 				end
 			end)
-			swatches[category][option.id] = { button = button, stroke = stroke, lock = lock, option = option }
+			swatches[category][option.id] = { button = button, stroke = stroke, lock = lock, option = option, price = price }
 		end
 	end
 
@@ -139,6 +177,9 @@ function CustomizePanel.Refresh()
 		for optionId, entry in entries do
 			entry.stroke.Transparency = custom[category] == optionId and 0 or 1
 			entry.lock.Visible = not Customization.CanUse(entry.option, data.level, isVip)
+			if entry.price then
+				entry.price.Visible = not Customization.Owns(data, category, entry.option)
+			end
 		end
 	end
 end

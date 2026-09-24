@@ -22,6 +22,8 @@ local UpgradesPanel = require(UI.UpgradesPanel)
 local CustomizePanel = require(UI.CustomizePanel)
 local ShopPanel = require(UI.ShopPanel)
 local CodesPanel = require(UI.CodesPanel)
+local TeamPanel = require(UI.TeamPanel)
+local FreeDrivePanel = require(UI.FreeDrivePanel)
 local RaceHUD = require(UI.RaceHUD)
 local Results = require(UI.Results)
 local MobileControls = require(UI.MobileControls)
@@ -47,6 +49,8 @@ UpgradesPanel.Init(gui, HUD)
 CustomizePanel.Init(gui, HUD)
 ShopPanel.Init(gui, HUD)
 CodesPanel.Init(gui, HUD)
+TeamPanel.Init(gui, HUD)
+FreeDrivePanel.Init(gui, HUD)
 RaceHUD.Init(gui, HUD, player.UserId)
 Results.Init(gui, HUD, player.UserId)
 MobileControls.Init(gui, CarController)
@@ -56,6 +60,8 @@ HUD.RegisterPanel("Upgrades", UpgradesPanel)
 HUD.RegisterPanel("Customize", CustomizePanel)
 HUD.RegisterPanel("Shop", ShopPanel)
 HUD.RegisterPanel("Codes", CodesPanel)
+HUD.RegisterPanel("Teams", TeamPanel)
+HUD.RegisterPanel("FreeDrive", FreeDrivePanel)
 
 CarController.OnTelemetry = RaceHUD.SetTelemetry
 
@@ -79,12 +85,6 @@ Remotes.Event("Notify").OnClientEvent:Connect(Notify.Show)
 
 Remotes.Event("RaceState").OnClientEvent:Connect(function(payload)
 	State.race = payload
-	State.inRace = table.find(payload.participants or {}, player.UserId) ~= nil
-	if State.inRace and payload.mapId then
-		LightingController.SetMap(payload.mapId)
-	else
-		LightingController.SetMap(nil)
-	end
 	State.Fire("Race", payload)
 end)
 
@@ -94,14 +94,17 @@ Remotes.Event("CarAssigned").OnClientEvent:Connect(function(model, mode)
 	if not model then
 		return
 	end
-	if mode == "race" then
+	if mode == "race" or mode == "free" then
 		HUD.CloseAll()
 		Results.Hide()
 	end
+	-- Each track has its own time of day / weather; the lobby has its own.
+	LightingController.SetMap(model:GetAttribute("MapId"))
 	task.spawn(CarController.Start, model, mode)
 end)
 Remotes.Event("CarRemoved").OnClientEvent:Connect(function()
 	CarController.Stop()
+	LightingController.SetMap(nil)
 end)
 
 Remotes.Event("Countdown").OnClientEvent:Connect(RaceHUD.Countdown)
@@ -143,8 +146,17 @@ RunService.RenderStepped:Connect(function()
 end)
 
 ProximityPromptService.PromptTriggered:Connect(function(prompt)
+	if State.driving then
+		return
+	end
 	local carId = prompt:GetAttribute("CarId")
-	if carId and not State.driving then
+	local teamQueue = prompt:GetAttribute("TeamQueue")
+	local panel = prompt:GetAttribute("OpenPanel")
+	if carId then
 		HUD.OpenPanel("Garage", carId)
+	elseif teamQueue then
+		TeamPanel.Toggle(teamQueue)
+	elseif panel then
+		HUD.OpenPanel(panel)
 	end
 end)

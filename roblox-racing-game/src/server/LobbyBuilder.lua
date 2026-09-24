@@ -19,6 +19,7 @@ local LobbyBuilder = {}
 local statusLabel, subStatusLabel
 local leaderboardRows = {}
 local testSpawn
+local teamPadLabels = {}
 
 local function rgb(r, g, b)
 	return Color3.fromRGB(r, g, b)
@@ -234,6 +235,101 @@ function LobbyBuilder.Build()
 		end
 	end
 
+	-- Team Arena: queue pads for 1v1 .. 5v5 ----------------------------------------
+	local arenaZ = 86
+	local banner = newPart(
+		lobby,
+		Vector3.new(170, 14, 1),
+		CFrame.new(origin + Vector3.new(0, 9, arenaZ + 18)),
+		rgb(20, 20, 26),
+		Enum.Material.SmoothPlastic
+	)
+	local _, bannerBg = surfaceGui(banner, Enum.NormalId.Front, 10)
+	text(bannerBg, "TEAM ARENA", UDim2.fromScale(0.6, 0.55), UDim2.fromScale(0.2, 0.05), rgb(255, 200, 60))
+	text(
+		bannerBg,
+		"Stand on a pad to queue • Red vs Blue • most points wins",
+		UDim2.fromScale(0.8, 0.28),
+		UDim2.fromScale(0.1, 0.65),
+		rgb(220, 220, 230),
+		Enum.Font.GothamBold
+	)
+	local teamColors = { rgb(235, 60, 60), rgb(60, 140, 255) }
+	for i, size in Config.TeamSizes do
+		local x = (i - (#Config.TeamSizes + 1) / 2) * 32
+		local pad = newPart(
+			lobby,
+			Vector3.new(24, 0.4, 18),
+			CFrame.new(origin + Vector3.new(x, 0.3, arenaZ)),
+			rgb(30, 30, 38),
+			Enum.Material.SmoothPlastic
+		)
+		for side = 1, 2 do
+			newPart(
+				lobby,
+				Vector3.new(11, 0.1, 17),
+				CFrame.new(origin + Vector3.new(x + (side == 1 and -6 or 6), 0.55, arenaZ)),
+				teamColors[side],
+				Enum.Material.Neon,
+				{ visualOnly = true, transparency = 0.35 }
+			)
+		end
+		local board = Instance.new("BillboardGui")
+		board.Size = UDim2.fromOffset(170, 80)
+		board.StudsOffset = Vector3.new(0, 7, 0)
+		board.MaxDistance = 140
+		board.Parent = pad
+		text(board, string.format("%dv%d", size, size), UDim2.new(1, 0, 0.55, 0), UDim2.new(), Color3.new(1, 1, 1))
+		teamPadLabels[size] = text(
+			board,
+			string.format("0 / %d queued", size * 2),
+			UDim2.new(1, 0, 0.35, 0),
+			UDim2.new(0, 0, 0.6, 0),
+			rgb(255, 200, 60),
+			Enum.Font.GothamBold
+		)
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.ActionText = string.format("Join / leave %dv%d queue", size, size)
+		prompt.ObjectText = "Team Arena"
+		prompt.HoldDuration = 0
+		prompt.MaxActivationDistance = 14
+		prompt.RequiresLineOfSight = false
+		prompt:SetAttribute("TeamQueue", size)
+		prompt.Parent = pad
+	end
+
+	-- Free drive kiosk ----------------------------------------------------------------
+	local kiosk = newPart(
+		lobby,
+		Vector3.new(8, 10, 8),
+		CFrame.new(origin + Vector3.new(-80, 5, 50)),
+		rgb(25, 28, 36),
+		Enum.Material.SmoothPlastic
+	)
+	newPart(
+		lobby,
+		Vector3.new(8.4, 1, 8.4),
+		CFrame.new(origin + Vector3.new(-80, 10.5, 50)),
+		rgb(60, 210, 110),
+		Enum.Material.Neon,
+		{ visualOnly = true }
+	)
+	local kioskBoard = Instance.new("BillboardGui")
+	kioskBoard.Size = UDim2.fromOffset(200, 60)
+	kioskBoard.StudsOffset = Vector3.new(0, 9, 0)
+	kioskBoard.MaxDistance = 140
+	kioskBoard.Parent = kiosk
+	text(kioskBoard, "FREE DRIVE", UDim2.new(1, 0, 0.6, 0), UDim2.new(), rgb(60, 210, 110))
+	text(kioskBoard, "Cruise any circuit", UDim2.new(1, 0, 0.35, 0), UDim2.new(0, 0, 0.62, 0), Color3.new(1, 1, 1), Enum.Font.GothamBold)
+	local kioskPrompt = Instance.new("ProximityPrompt")
+	kioskPrompt.ActionText = "Choose a circuit"
+	kioskPrompt.ObjectText = "Free Drive"
+	kioskPrompt.HoldDuration = 0
+	kioskPrompt.MaxActivationDistance = 14
+	kioskPrompt.RequiresLineOfSight = false
+	kioskPrompt:SetAttribute("OpenPanel", "FreeDrive")
+	kioskPrompt.Parent = kiosk
+
 	-- Test-drive ring road -------------------------------------------------------------
 	local ringPoints = {}
 	for i = 0, 11 do
@@ -292,6 +388,13 @@ function LobbyBuilder.SetStatus(main, sub)
 	if statusLabel then
 		statusLabel.Text = main
 		subStatusLabel.Text = sub or ""
+	end
+end
+
+function LobbyBuilder.SetTeamPad(size, count, needed)
+	local label = teamPadLabels[size]
+	if label then
+		label.Text = string.format("%d / %d queued", count, needed)
 	end
 end
 
