@@ -1,5 +1,6 @@
 -- Coin purchases (cars, upgrades), customisation, codes and every Robux
 -- transaction (developer products + game passes).
+local DataStoreService = game:GetService("DataStoreService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -11,8 +12,11 @@ local Cars = require(Shared.Cars)
 local Upgrades = require(Shared.Upgrades)
 local Customization = require(Shared.Customization)
 local Products = require(Shared.Products)
+local Levels = require(Shared.Levels)
 
 local DataService = require(script.Parent.DataService)
+local AdminCodes = require(script.Parent.AdminCodes)
+local sha256 = require(script.Parent.Sha256)
 
 local ShopService = {}
 ShopService.Handlers = {}
@@ -96,7 +100,7 @@ function ShopService.Handlers.Customize(player, carId, category, optionId)
 	if not option then
 		return false, "Invalid option."
 	end
-	local ok, reason = Customization.CanUse(option, data.level, DataService.HasPass(player, "VIP"))
+	local ok, reason = Customization.CanUse(option, data.level, DataService.HasVipCosmetics(player))
 	if not ok then
 		return false, reason
 	end
@@ -106,14 +110,82 @@ function ShopService.Handlers.Customize(player, carId, category, optionId)
 	return true
 end
 
+-- Claims one use of an admin code in the cross-server DataStore.
+-- Returns "granted", "full" or "error".
+local function claimAdminUse(player, entry)
+	local result = "error"
+	local ok, err = pcall(function()
+		local store = DataStoreService:GetDataStore(AdminCodes.STORE)
+		store:UpdateAsync(entry.id, function(record)
+			record = record or { uses = 0, users = {} }
+			local key = tostring(player.UserId)
+			if record.users[key] then
+				result = "granted" -- this account already holds a use
+				return nil
+			end
+			if record.uses >= entry.maxUses then
+				result = "full"
+				return nil
+			end
+			record.uses += 1
+			record.users[key] = true
+			result = "granted"
+			return record
+		end)
+	end)
+	if not ok then
+		warn("[ShopService] Admin code check failed:", err)
+		return "error"
+	end
+	return result
+end
+
+local function grantAdmin(data)
+	data.admin = true
+	data.level = Levels.MAX
+	data.xp = 0
+	for _, carId in Cars.Order do
+		data.owned[carId] = true
+		DataService.EnsureCar(data, carId)
+	end
+end
+
+local function redeemAdminCode(player, data, code)
+	local entry = AdminCodes.Codes[sha256(code)]
+	if not entry then
+		return nil
+	end
+	if data.codes[entry.id] then
+		return false, "You already redeemed this code."
+	end
+	local claim = claimAdminUse(player, entry)
+	if claim == "full" then
+		return false, "This code has already been used the maximum number of times."
+	elseif claim ~= "granted" then
+		return false, "Couldn't check this code right now. Try again in a minute."
+	end
+	data.codes[entry.id] = true
+	grantAdmin(data)
+	DataService.Push(player)
+	DataService.Save(player)
+	notify(player, "ADMIN ACCESS GRANTED: level 50, every car and every customization unlocked.", "levelup")
+	return true
+end
+
 function ShopService.Handlers.RedeemCode(player, code)
 	local data = DataService.Get(player)
-	if not data or type(code) ~= "string" then
+	if not data or type(code) ~= "string" or #code > 64 then
 		return false, "Invalid code."
 	end
 	code = string.upper((string.gsub(code, "%s", "")))
 	local reward = Config.Codes[code]
 	if not reward then
+		if #code == 25 then
+			local ok, msg = redeemAdminCode(player, data, code)
+			if ok ~= nil then
+				return ok, msg
+			end
+		end
 		return false, "That code doesn't exist."
 	end
 	if data.codes[code] then

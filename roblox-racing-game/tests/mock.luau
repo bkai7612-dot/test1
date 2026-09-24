@@ -805,7 +805,19 @@ classMethods.Seat = {
 	end,
 }
 
+local KNOWN_CLASSES = {}
+for _, name in string.split(
+	"Part WedgePart Seat SpawnLocation Model Folder Weld WeldConstraint Humanoid Camera Frame TextLabel TextButton "
+		.. "TextBox ScrollingFrame ViewportFrame ScreenGui SurfaceGui BillboardGui PointLight SpotLight IntValue "
+		.. "ParticleEmitter SpecialMesh UICorner UIStroke UIScale UIPadding UIListLayout UIGridLayout UIGradient "
+		.. "UITextSizeConstraint UISizeConstraint Sound Atmosphere Fire ProximityPrompt RemoteEvent RemoteFunction "
+		.. "BindableEvent Player PlayerGui Script LocalScript ModuleScript",
+	" "
+) do
+	KNOWN_CLASSES[name] = true
+end
 Instance.new = function(className, parent)
+	assert(KNOWN_CLASSES[className], "Instance.new: unknown class " .. tostring(className))
 	local inst = newInstance(className)
 	if parent then
 		inst.Parent = parent
@@ -931,7 +943,11 @@ local function makeStore(name)
 			data[key] = value
 		end,
 		UpdateAsync = function(_, key, fn)
-			data[key] = fn(data[key])
+			local result = fn(data[key])
+			if result ~= nil then
+				data[key] = result
+			end
+			return data[key]
 		end,
 		GetSortedAsync = function(_, _asc, n)
 			local list = {}

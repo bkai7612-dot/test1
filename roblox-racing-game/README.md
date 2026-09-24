@@ -14,6 +14,7 @@ plain text files and builds into a place file with [Rojo](https://rojo.space).
 | **Garage** | 3D car preview, stats, buy with coins (or Robux), select a car. |
 | **Upgrades** | Engine, Turbo, Suspension, Brakes, Nitro. 5 levels each, saved per car. |
 | **Customization** | Body paint, accent color (stripes / wing / scoop), rims, underglow (including an animated rainbow glow), paint finish (glossy, matte, metallic, carbon, chrome, neon). Some are unlocked by level or VIP. |
+| **Level 50 reward car** | The *Double Cheese Cruiser*: a cheeseburger on wheels (sesame-seed roof, cheese-slice spoiler, french-fry nitro exhausts) and the fastest car in the game. Every player who reaches level 50 gets it for free; it can't be bought. |
 | **Levels** | Level cap of 50. XP depends on where you finish: 1st 250, 2nd 175, 3rd 125, 4th and below 75, did not finish 20. A solo race gives a flat 100, so you can't farm 1st place alone. Every level-up pays coins, reaching 50 pays an extra 5,000, and after the cap XP turns into coins (2 XP = 1 coin). Cars and cosmetics unlock by level. |
 | **Robux** | Coin packs, "Instant Max Upgrade" (one stat), "Fully Tuned" (every stat), unlock any car with Robux, VIP game pass (2x coins and exclusive cosmetics), 2x XP game pass. |
 | **Racing** | Round-based: map vote → grid → 3-2-1 countdown → laps with checkpoints → live positions → results and rewards. Handles respawning, cars that flip over, players leaving, and personal-best lap times. |
@@ -81,6 +82,16 @@ progress won't be saved this session.
 Purchases are handled in `src/server/ShopService.lua`. Each purchase ID is
 stored with the player's save, so if Roblox retries a receipt the player
 isn't charged or rewarded twice.
+
+## Admin code
+
+There is one secret 25-character admin code (it's not in this repo — only its
+SHA-256 hash is, in `src/server/AdminCodes.lua`). Typing it into **CODES**
+gives that account level 50, every car and every customization option.
+
+- It can be used by **2 different accounts in total**, counted across all servers in a DataStore, so it only works in a published game with API services on.
+- Redeeming it again on an account that already used it doesn't use up another slot.
+- To make a new code, hash a new random string (`echo -n YOURCODE | sha256sum`) and add it to `AdminCodes.lua` with a new `id`.
 
 ## Customizing
 

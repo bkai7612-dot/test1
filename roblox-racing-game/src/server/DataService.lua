@@ -56,6 +56,7 @@ local function defaultProfile()
 		codes = {},
 		lastDaily = 0,
 		dailyStreak = 0,
+		admin = false,
 	}
 end
 
@@ -83,6 +84,21 @@ function DataService.EnsureCar(data, carId)
 	end
 end
 
+-- Gives the player any reward cars (e.g. the level 50 burger) they've
+-- reached the level for. Returns the ids of newly granted cars.
+function DataService.GrantRewardCars(data)
+	local granted = {}
+	for _, carId in Cars.Order do
+		local car = Cars.List[carId]
+		if car.reward and data.level >= car.level and not data.owned[carId] then
+			data.owned[carId] = true
+			DataService.EnsureCar(data, carId)
+			table.insert(granted, carId)
+		end
+	end
+	return granted
+end
+
 local function sanitize(data)
 	if not Cars.List[data.selectedCar] or not data.owned[data.selectedCar] then
 		data.selectedCar = "Hatch"
@@ -97,6 +113,7 @@ local function sanitize(data)
 			DataService.EnsureCar(data, carId)
 		end
 	end
+	DataService.GrantRewardCars(data)
 end
 
 ---------------------------------------------------------------------------
@@ -119,6 +136,12 @@ end
 function DataService.HasPass(player, key)
 	local profile = profiles[player]
 	return profile ~= nil and profile.passes[key] == true
+end
+
+-- VIP-only cosmetics are open to VIP pass owners and admin accounts.
+function DataService.HasVipCosmetics(player)
+	local d = DataService.Get(player)
+	return DataService.HasPass(player, "VIP") or (d ~= nil and d.admin == true)
 end
 
 function DataService.SetPass(player, key, owned)
@@ -146,6 +169,7 @@ function DataService.View(player)
 		level = d.level,
 		xpNeeded = Levels.XPForLevel(d.level),
 		maxLevel = Levels.MAX,
+		admin = d.admin == true,
 		selectedCar = d.selectedCar,
 		owned = d.owned,
 		upgrades = d.upgrades,
@@ -221,9 +245,17 @@ function DataService.AddXP(player, amount)
 		end
 		d.coins += bonus
 		for _, carId in Cars.Order do
-			if Cars.List[carId].level == d.level then
-				DataService.Notify(player, Cars.List[carId].name .. " is now available in the Garage!", "success")
+			local car = Cars.List[carId]
+			if car.level == d.level and not car.reward then
+				DataService.Notify(player, car.name .. " is now available in the Garage!", "success")
 			end
+		end
+		for _, carId in DataService.GrantRewardCars(d) do
+			DataService.Notify(
+				player,
+				"LEGENDARY UNLOCK: the " .. Cars.List[carId].name .. " is waiting in your Garage!",
+				"levelup"
+			)
 		end
 	end
 	if d.level >= Levels.MAX then

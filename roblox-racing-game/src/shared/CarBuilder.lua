@@ -75,6 +75,136 @@ local function addNitroFlame(exhaust)
 	emitter.Parent = exhaust
 end
 
+-- The level 50 reward car: a double cheeseburger on wheels. The buns,
+-- patty, lettuce and tomato keep their food colours; the cheese uses the
+-- accent colour so it can still be customised.
+local BUN = Color3.fromRGB(214, 146, 62)
+local BUN_BASE = Color3.fromRGB(196, 128, 52)
+local PATTY = Color3.fromRGB(92, 52, 32)
+local LETTUCE = Color3.fromRGB(96, 196, 64)
+local TOMATO = Color3.fromRGB(215, 45, 35)
+local KETCHUP = Color3.fromRGB(180, 20, 20)
+local SESAME = Color3.fromRGB(250, 240, 210)
+local FRY = Color3.fromRGB(245, 195, 70)
+
+local function disc(model, name, height, diameter, y, color, material, role)
+	return cylinder(
+		model,
+		name,
+		Vector3.new(height, diameter, diameter),
+		CFrame.new(0, y, 0) * CFrame.Angles(0, 0, math.pi / 2),
+		color,
+		material,
+		role
+	)
+end
+
+local function buildBurger(model, b, display)
+	local D = b.length -- the burger is round: diameter = length
+	local bottom = b.bottom
+
+	disc(model, "BottomBun", 1.4, D, bottom + 0.7, BUN_BASE)
+	disc(model, "Patty", 1.0, D + 0.5, bottom + 1.9, PATTY, Enum.Material.Ground)
+	disc(model, "Ketchup", 0.18, D + 0.1, bottom + 2.49, KETCHUP)
+	-- Square cheese slice turned 45 degrees so the corners droop over the edge.
+	make(
+		model,
+		"Part",
+		"Cheese",
+		Vector3.new(D * 0.82, 0.25, D * 0.82),
+		CFrame.new(0, bottom + 2.7, 0) * CFrame.Angles(0, math.rad(45), 0),
+		Color3.new(1, 1, 1),
+		nil,
+		"Accent"
+	)
+	disc(model, "Lettuce", 0.35, D + 0.9, bottom + 2.95, LETTUCE, Enum.Material.LeafyGrass)
+	for i = 0, 2 do
+		local angle = i / 3 * math.pi * 2 + 0.4
+		cylinder(
+			model,
+			"Tomato",
+			Vector3.new(0.3, D * 0.3, D * 0.3),
+			CFrame.new(math.cos(angle) * D * 0.28, bottom + 3.25, math.sin(angle) * D * 0.28)
+				* CFrame.Angles(0, 0, math.pi / 2),
+			TOMATO
+		)
+	end
+
+	-- Top bun: short cylinder plus a stretched sphere for the dome.
+	local bunY = bottom + 3.4
+	disc(model, "TopBunBase", 1.0, D + 0.3, bunY + 0.5, BUN)
+	local dome = make(model, "Part", "TopBun", Vector3.new(D + 0.3, 3.8, D + 0.3), CFrame.new(0, bunY + 1, 0), BUN)
+	local mesh = Instance.new("SpecialMesh")
+	mesh.MeshType = Enum.MeshType.Sphere
+	mesh.Parent = dome
+	local r = (D + 0.3) / 2
+	local seeds = Random.new(50)
+	for _ = 1, 22 do
+		local angle = seeds:NextNumber(0, math.pi * 2)
+		local dist = seeds:NextNumber(0.5, r * 0.8)
+		local x, z = math.cos(angle) * dist, math.sin(angle) * dist
+		-- Skip the hatch where the driver pops out.
+		if (Vector2.new(x, z) - Vector2.new(0, 0.8)).Magnitude > 2.2 then
+			local y = bunY + 1 + 1.9 * math.sqrt(math.max(0, 1 - (dist / r) ^ 2))
+			make(
+				model,
+				"Part",
+				"Sesame",
+				Vector3.new(0.45, 0.2, 0.28),
+				CFrame.new(x, y, z) * CFrame.Angles(0, seeds:NextNumber(0, math.pi), 0),
+				SESAME
+			)
+		end
+	end
+
+	-- Headlights set into the patty, tail lights at the back.
+	local edge = (D + 0.5) / 2
+	for _, side in { -1, 1 } do
+		local head = make(
+			model,
+			"Part",
+			"Headlight",
+			Vector3.new(1.3, 0.6, 0.3),
+			CFrame.new(side * 2.2, bottom + 1.9, -edge + 0.3),
+			HEADLIGHT,
+			Enum.Material.Neon
+		)
+		if not display then
+			local spot = Instance.new("SpotLight")
+			spot.Face = Enum.NormalId.Front
+			spot.Range = 60
+			spot.Angle = 55
+			spot.Brightness = 3
+			spot.Parent = head
+		end
+		make(
+			model,
+			"Part",
+			"Taillight",
+			Vector3.new(1.3, 0.5, 0.3),
+			CFrame.new(side * 2.2, bottom + 1.9, edge - 0.3),
+			TAILLIGHT,
+			Enum.Material.Neon
+		)
+		-- French-fry exhausts (nitro flames shoot out of them).
+		for k = 0, 1 do
+			local fry = make(
+				model,
+				"Part",
+				"Exhaust",
+				Vector3.new(2.4, 0.45, 0.45),
+				CFrame.new(side * (1.2 + k * 0.6), bottom + 0.9 + k * 0.3, D / 2 + 0.6)
+					* CFrame.Angles(0, math.pi / 2, 0)
+					* CFrame.Angles(0, 0, math.rad(-12)),
+				FRY
+			)
+			if not display and k == 0 then
+				addNitroFlame(fry)
+			end
+		end
+	end
+end
+
 function CarBuilder.Build(carId, custom, display)
 	local car = Cars.List[carId] or Cars.List.Hatch
 	local b = car.body
@@ -105,168 +235,174 @@ function CarBuilder.Build(carId, custom, display)
 	chassis.Parent = model
 	model.PrimaryPart = chassis
 
-	-- Lower body -------------------------------------------------------
-	make(model, "Part", "Body", Vector3.new(W, h1, L), CFrame.new(0, bottom + h1 / 2, 0), paint, nil, "Paint")
-	make(
-		model,
-		"Part",
-		"BodyUpper",
-		Vector3.new(W, b.noseDrop, L - b.noseLen),
-		CFrame.new(0, bottom + h1 + b.noseDrop / 2, b.noseLen / 2),
-		paint,
-		nil,
-		"Paint"
-	)
-	-- WedgePart: tall edge at +Z, slope falls toward -Z (the nose).
-	make(
-		model,
-		"WedgePart",
-		"Nose",
-		Vector3.new(W, b.noseDrop, b.noseLen),
-		CFrame.new(0, bottom + h1 + b.noseDrop / 2, frontZ + b.noseLen / 2),
-		paint,
-		nil,
-		"Paint"
-	)
-
-	-- Cabin --------------------------------------------------------------
 	local cabW = W - 2 * c.inset
 	local cabY = yTop + c.height / 2
-	local glassCore = make(
-		model,
-		"Part",
-		"Cabin",
-		Vector3.new(cabW, c.height, c.length),
-		CFrame.new(0, cabY, c.z),
-		GLASS,
-		Enum.Material.Glass
-	)
-	glassCore.Transparency = 0.35
-	local windshield = make(
-		model,
-		"WedgePart",
-		"Windshield",
-		Vector3.new(cabW, c.height, c.windshield),
-		CFrame.new(0, cabY, c.z - c.length / 2 - c.windshield / 2),
-		GLASS,
-		Enum.Material.Glass
-	)
-	windshield.Transparency = 0.35
-	local rearGlass = make(
-		model,
-		"WedgePart",
-		"RearWindow",
-		Vector3.new(cabW, c.height, c.rear),
-		CFrame.new(0, cabY, c.z + c.length / 2 + c.rear / 2) * CFrame.Angles(0, math.pi, 0),
-		GLASS,
-		Enum.Material.Glass
-	)
-	rearGlass.Transparency = 0.35
-	make(
-		model,
-		"Part",
-		"Roof",
-		Vector3.new(cabW + 0.1, 0.25, c.length + 0.1),
-		CFrame.new(0, yTop + c.height + 0.12, c.z),
-		paint,
-		nil,
-		"Paint"
-	)
-	make(
-		model,
-		"Part",
-		"BPillar",
-		Vector3.new(cabW + 0.06, c.height, 0.35),
-		CFrame.new(0, cabY, c.z),
-		paint,
-		nil,
-		"Paint"
-	)
-	for _, side in { -1, 1 } do
+
+	if b.style == "burger" then
+		buildBurger(model, b, display)
+	else
+		-- Lower body -------------------------------------------------------
+		make(model, "Part", "Body", Vector3.new(W, h1, L), CFrame.new(0, bottom + h1 / 2, 0), paint, nil, "Paint")
 		make(
 			model,
 			"Part",
-			"Mirror",
-			Vector3.new(0.5, 0.35, 0.6),
-			CFrame.new(side * (W / 2 + 0.2), yTop + 0.35, c.z - c.length / 2 - c.windshield * 0.3),
+			"BodyUpper",
+			Vector3.new(W, b.noseDrop, L - b.noseLen),
+			CFrame.new(0, bottom + h1 + b.noseDrop / 2, b.noseLen / 2),
 			paint,
 			nil,
 			"Paint"
 		)
-	end
+		-- WedgePart: tall edge at +Z, slope falls toward -Z (the nose).
+		make(
+			model,
+			"WedgePart",
+			"Nose",
+			Vector3.new(W, b.noseDrop, b.noseLen),
+			CFrame.new(0, bottom + h1 + b.noseDrop / 2, frontZ + b.noseLen / 2),
+			paint,
+			nil,
+			"Paint"
+		)
 
-	-- Lights, grille, bumpers ------------------------------------------
-	for _, side in { -1, 1 } do
-		local head = make(
+		-- Cabin --------------------------------------------------------------
+		local glassCore = make(
 			model,
 			"Part",
-			"Headlight",
-			Vector3.new(1.5, 0.45, 0.2),
-			CFrame.new(side * (W / 2 - 1.1), bottom + h1 - 0.35, frontZ - 0.08),
-			HEADLIGHT,
-			Enum.Material.Neon
+			"Cabin",
+			Vector3.new(cabW, c.height, c.length),
+			CFrame.new(0, cabY, c.z),
+			GLASS,
+			Enum.Material.Glass
 		)
-		if not display then
-			local spot = Instance.new("SpotLight")
-			spot.Face = Enum.NormalId.Front
-			spot.Range = 60
-			spot.Angle = 55
-			spot.Brightness = 3
-			spot.Parent = head
+		glassCore.Transparency = 0.35
+		local windshield = make(
+			model,
+			"WedgePart",
+			"Windshield",
+			Vector3.new(cabW, c.height, c.windshield),
+			CFrame.new(0, cabY, c.z - c.length / 2 - c.windshield / 2),
+			GLASS,
+			Enum.Material.Glass
+		)
+		windshield.Transparency = 0.35
+		local rearGlass = make(
+			model,
+			"WedgePart",
+			"RearWindow",
+			Vector3.new(cabW, c.height, c.rear),
+			CFrame.new(0, cabY, c.z + c.length / 2 + c.rear / 2) * CFrame.Angles(0, math.pi, 0),
+			GLASS,
+			Enum.Material.Glass
+		)
+		rearGlass.Transparency = 0.35
+		make(
+			model,
+			"Part",
+			"Roof",
+			Vector3.new(cabW + 0.1, 0.25, c.length + 0.1),
+			CFrame.new(0, yTop + c.height + 0.12, c.z),
+			paint,
+			nil,
+			"Paint"
+		)
+		make(
+			model,
+			"Part",
+			"BPillar",
+			Vector3.new(cabW + 0.06, c.height, 0.35),
+			CFrame.new(0, cabY, c.z),
+			paint,
+			nil,
+			"Paint"
+		)
+		for _, side in { -1, 1 } do
+			make(
+				model,
+				"Part",
+				"Mirror",
+				Vector3.new(0.5, 0.35, 0.6),
+				CFrame.new(side * (W / 2 + 0.2), yTop + 0.35, c.z - c.length / 2 - c.windshield * 0.3),
+				paint,
+				nil,
+				"Paint"
+			)
+		end
+
+		-- Lights, grille, bumpers ------------------------------------------
+		for _, side in { -1, 1 } do
+			local head = make(
+				model,
+				"Part",
+				"Headlight",
+				Vector3.new(1.5, 0.45, 0.2),
+				CFrame.new(side * (W / 2 - 1.1), bottom + h1 - 0.35, frontZ - 0.08),
+				HEADLIGHT,
+				Enum.Material.Neon
+			)
+			if not display then
+				local spot = Instance.new("SpotLight")
+				spot.Face = Enum.NormalId.Front
+				spot.Range = 60
+				spot.Angle = 55
+				spot.Brightness = 3
+				spot.Parent = head
+			end
+			make(
+				model,
+				"Part",
+				"Taillight",
+				Vector3.new(1.6, 0.4, 0.15),
+				CFrame.new(side * (W / 2 - 1.1), yTop - 0.4, rearZ + 0.06),
+				TAILLIGHT,
+				Enum.Material.Neon
+			)
+			local exhaust = cylinder(
+				model,
+				"Exhaust",
+				Vector3.new(0.8, 0.45, 0.45),
+				CFrame.new(side * (W / 2 - 1.6), bottom + 0.35, rearZ + 0.15) * CFrame.Angles(0, math.pi / 2, 0),
+				CHROME,
+				Enum.Material.Metal
+			)
+			if not display then
+				addNitroFlame(exhaust)
+			end
 		end
 		make(
 			model,
 			"Part",
-			"Taillight",
-			Vector3.new(1.6, 0.4, 0.15),
-			CFrame.new(side * (W / 2 - 1.1), yTop - 0.4, rearZ + 0.06),
-			TAILLIGHT,
-			Enum.Material.Neon
+			"Grille",
+			Vector3.new(W * 0.42, h1 * 0.45, 0.15),
+			CFrame.new(0, bottom + h1 * 0.45, frontZ - 0.05),
+			TRIM
 		)
-		local exhaust = cylinder(
+		make(
 			model,
-			"Exhaust",
-			Vector3.new(0.8, 0.45, 0.45),
-			CFrame.new(side * (W / 2 - 1.6), bottom + 0.35, rearZ + 0.15) * CFrame.Angles(0, math.pi / 2, 0),
-			CHROME,
-			Enum.Material.Metal
+			"Part",
+			"FrontLip",
+			Vector3.new(W - 0.4, 0.25, 0.8),
+			CFrame.new(0, bottom + 0.05, frontZ + 0.2),
+			TRIM
 		)
-		if not display then
-			addNitroFlame(exhaust)
-		end
+		make(
+			model,
+			"Part",
+			"RearBumper",
+			Vector3.new(W - 0.2, 0.5, 0.3),
+			CFrame.new(0, bottom + 0.3, rearZ + 0.1),
+			TRIM
+		)
+		make(
+			model,
+			"Part",
+			"Plate",
+			Vector3.new(1.6, 0.6, 0.05),
+			CFrame.new(0, bottom + h1 * 0.55 + 0.2, rearZ + 0.04),
+			Color3.fromRGB(240, 240, 240)
+		)
+
 	end
-	make(
-		model,
-		"Part",
-		"Grille",
-		Vector3.new(W * 0.42, h1 * 0.45, 0.15),
-		CFrame.new(0, bottom + h1 * 0.45, frontZ - 0.05),
-		TRIM
-	)
-	make(
-		model,
-		"Part",
-		"FrontLip",
-		Vector3.new(W - 0.4, 0.25, 0.8),
-		CFrame.new(0, bottom + 0.05, frontZ + 0.2),
-		TRIM
-	)
-	make(
-		model,
-		"Part",
-		"RearBumper",
-		Vector3.new(W - 0.2, 0.5, 0.3),
-		CFrame.new(0, bottom + 0.3, rearZ + 0.1),
-		TRIM
-	)
-	make(
-		model,
-		"Part",
-		"Plate",
-		Vector3.new(1.6, 0.6, 0.05),
-		CFrame.new(0, bottom + h1 * 0.55 + 0.2, rearZ + 0.04),
-		Color3.fromRGB(240, 240, 240)
-	)
 
 	-- Wheels ------------------------------------------------------------
 	local r, ww = b.wheelRadius, b.wheelWidth
@@ -314,180 +450,183 @@ function CarBuilder.Build(carId, custom, display)
 		end
 	end
 
-	-- Spoilers -----------------------------------------------------------
-	if b.spoiler == "roof" then
-		make(
-			model,
-			"Part",
-			"Spoiler",
-			Vector3.new(cabW, 0.18, 1.0),
-			CFrame.new(0, yTop + c.height + 0.22, c.z + c.length / 2 + 0.35),
-			paint,
-			nil,
-			"Accent"
-		)
-	elseif b.spoiler == "wing" or b.spoiler == "gtwing" then
-		local tall = b.spoiler == "gtwing" and 1.5 or 0.9
-		local wingW = b.spoiler == "gtwing" and W + 0.2 or W - 0.8
-		for _, side in { -1, 1 } do
+	if b.style ~= "burger" then
+		-- Spoilers -----------------------------------------------------------
+		if b.spoiler == "roof" then
 			make(
 				model,
 				"Part",
-				"WingPost",
-				Vector3.new(0.25, tall, 0.5),
-				CFrame.new(side * (W / 2 - 1.4), yTop + tall / 2, rearZ - 0.9),
-				TRIM
-			)
-			if b.spoiler == "gtwing" then
-				make(
-					model,
-					"Part",
-					"Endplate",
-					Vector3.new(0.15, 0.8, 1.7),
-					CFrame.new(side * (wingW / 2 + 0.05), yTop + tall + 0.05, rearZ - 0.8),
-					paint,
-					nil,
-					"Accent"
-				)
-			end
-		end
-		make(
-			model,
-			"Part",
-			"Wing",
-			Vector3.new(wingW, 0.2, b.spoiler == "gtwing" and 1.6 or 1.3),
-			CFrame.new(0, yTop + tall + 0.1, rearZ - 0.8),
-			paint,
-			nil,
-			"Accent"
-		)
-	elseif b.spoiler == "ducktail" then
-		make(
-			model,
-			"WedgePart",
-			"Ducktail",
-			Vector3.new(W, 0.45, 1.1),
-			CFrame.new(0, yTop + 0.22, rearZ - 0.55),
-			paint,
-			nil,
-			"Paint"
-		)
-	end
-
-	-- Extras ---------------------------------------------------------------
-	local ex = b.extras
-	local hoodStart = frontZ + b.noseLen
-	local hoodEnd = c.z - c.length / 2 - c.windshield
-	local hoodLen = hoodEnd - hoodStart
-	if ex.scoop then
-		make(
-			model,
-			"Part",
-			"Scoop",
-			Vector3.new(1.8, 0.4, 2.0),
-			CFrame.new(0, yTop + 0.2, hoodEnd - 1.4),
-			paint,
-			nil,
-			"Accent"
-		)
-	end
-	if ex.stripes then
-		local deckStart = c.z + c.length / 2 + c.rear
-		for _, sx in { -0.55, 0.55 } do
-			if hoodLen > 0.3 then
-				make(
-					model,
-					"Part",
-					"Stripe",
-					Vector3.new(0.55, 0.06, hoodLen),
-					CFrame.new(sx, yTop + 0.03, hoodStart + hoodLen / 2),
-					paint,
-					nil,
-					"Accent"
-				)
-			end
-			make(
-				model,
-				"Part",
-				"Stripe",
-				Vector3.new(0.55, 0.06, c.length),
-				CFrame.new(sx, yTop + c.height + 0.27, c.z),
+				"Spoiler",
+				Vector3.new(cabW, 0.18, 1.0),
+				CFrame.new(0, yTop + c.height + 0.22, c.z + c.length / 2 + 0.35),
 				paint,
 				nil,
 				"Accent"
 			)
-			if rearZ - deckStart > 0.3 then
+		elseif b.spoiler == "wing" or b.spoiler == "gtwing" then
+			local tall = b.spoiler == "gtwing" and 1.5 or 0.9
+			local wingW = b.spoiler == "gtwing" and W + 0.2 or W - 0.8
+			for _, side in { -1, 1 } do
+				make(
+					model,
+					"Part",
+					"WingPost",
+					Vector3.new(0.25, tall, 0.5),
+					CFrame.new(side * (W / 2 - 1.4), yTop + tall / 2, rearZ - 0.9),
+					TRIM
+				)
+				if b.spoiler == "gtwing" then
+					make(
+						model,
+						"Part",
+						"Endplate",
+						Vector3.new(0.15, 0.8, 1.7),
+						CFrame.new(side * (wingW / 2 + 0.05), yTop + tall + 0.05, rearZ - 0.8),
+						paint,
+						nil,
+						"Accent"
+					)
+				end
+			end
+			make(
+				model,
+				"Part",
+				"Wing",
+				Vector3.new(wingW, 0.2, b.spoiler == "gtwing" and 1.6 or 1.3),
+				CFrame.new(0, yTop + tall + 0.1, rearZ - 0.8),
+				paint,
+				nil,
+				"Accent"
+			)
+		elseif b.spoiler == "ducktail" then
+			make(
+				model,
+				"WedgePart",
+				"Ducktail",
+				Vector3.new(W, 0.45, 1.1),
+				CFrame.new(0, yTop + 0.22, rearZ - 0.55),
+				paint,
+				nil,
+				"Paint"
+			)
+		end
+
+		-- Extras ---------------------------------------------------------------
+		local ex = b.extras
+		local hoodStart = frontZ + b.noseLen
+		local hoodEnd = c.z - c.length / 2 - c.windshield
+		local hoodLen = hoodEnd - hoodStart
+		if ex.scoop then
+			make(
+				model,
+				"Part",
+				"Scoop",
+				Vector3.new(1.8, 0.4, 2.0),
+				CFrame.new(0, yTop + 0.2, hoodEnd - 1.4),
+				paint,
+				nil,
+				"Accent"
+			)
+		end
+		if ex.stripes then
+			local deckStart = c.z + c.length / 2 + c.rear
+			for _, sx in { -0.55, 0.55 } do
+				if hoodLen > 0.3 then
+					make(
+						model,
+						"Part",
+						"Stripe",
+						Vector3.new(0.55, 0.06, hoodLen),
+						CFrame.new(sx, yTop + 0.03, hoodStart + hoodLen / 2),
+						paint,
+						nil,
+						"Accent"
+					)
+				end
 				make(
 					model,
 					"Part",
 					"Stripe",
-					Vector3.new(0.55, 0.06, rearZ - deckStart),
-					CFrame.new(sx, yTop + 0.03, (deckStart + rearZ) / 2),
+					Vector3.new(0.55, 0.06, c.length),
+					CFrame.new(sx, yTop + c.height + 0.27, c.z),
 					paint,
 					nil,
 					"Accent"
 				)
+				if rearZ - deckStart > 0.3 then
+					make(
+						model,
+						"Part",
+						"Stripe",
+						Vector3.new(0.55, 0.06, rearZ - deckStart),
+						CFrame.new(sx, yTop + 0.03, (deckStart + rearZ) / 2),
+						paint,
+						nil,
+						"Accent"
+					)
+				end
 			end
 		end
-	end
-	if ex.roofVent then
-		make(
-			model,
-			"Part",
-			"RoofVent",
-			Vector3.new(1.4, 0.2, 0.8),
-			CFrame.new(0, yTop + c.height + 0.32, c.z - c.length / 2 + 0.6),
-			TRIM
-		)
-	end
-	if ex.intakes then
-		for _, side in { -1, 1 } do
+		if ex.roofVent then
 			make(
 				model,
 				"Part",
-				"SideIntake",
-				Vector3.new(0.2, 0.9, 2.2),
-				CFrame.new(side * (W / 2 + 0.02), bottom + h1 * 0.5 + 0.3, c.z + c.length / 2 + 0.8),
+				"RoofVent",
+				Vector3.new(1.4, 0.2, 0.8),
+				CFrame.new(0, yTop + c.height + 0.32, c.z - c.length / 2 + 0.6),
 				TRIM
 			)
 		end
-	end
-	if ex.engineVents then
-		local deckStart = c.z + c.length / 2 + c.rear
-		for i = 0, 2 do
+		if ex.intakes then
+			for _, side in { -1, 1 } do
+				make(
+					model,
+					"Part",
+					"SideIntake",
+					Vector3.new(0.2, 0.9, 2.2),
+					CFrame.new(side * (W / 2 + 0.02), bottom + h1 * 0.5 + 0.3, c.z + c.length / 2 + 0.8),
+					TRIM
+				)
+			end
+		end
+		if ex.engineVents then
+			local deckStart = c.z + c.length / 2 + c.rear
+			for i = 0, 2 do
+				make(
+					model,
+					"Part",
+					"EngineVent",
+					Vector3.new(cabW * 0.8, 0.08, 0.25),
+					CFrame.new(0, yTop + 0.04, deckStart + 0.4 + i * 0.6),
+					TRIM
+				)
+			end
+		end
+		if ex.splitter then
 			make(
 				model,
 				"Part",
-				"EngineVent",
-				Vector3.new(cabW * 0.8, 0.08, 0.25),
-				CFrame.new(0, yTop + 0.04, deckStart + 0.4 + i * 0.6),
-				TRIM
+				"Splitter",
+				Vector3.new(W + 0.2, 0.15, 1.0),
+				CFrame.new(0, bottom - 0.05, frontZ - 0.25),
+				paint,
+				nil,
+				"Accent"
 			)
 		end
-	end
-	if ex.splitter then
-		make(
-			model,
-			"Part",
-			"Splitter",
-			Vector3.new(W + 0.2, 0.15, 1.0),
-			CFrame.new(0, bottom - 0.05, frontZ - 0.25),
-			paint,
-			nil,
-			"Accent"
-		)
-	end
-	if ex.sideSkirts then
-		for _, side in { -1, 1 } do
-			make(
-				model,
-				"Part",
-				"SideSkirt",
-				Vector3.new(0.25, 0.4, L * 0.5),
-				CFrame.new(side * (W / 2 + 0.05), bottom + 0.2, 0),
-				TRIM
-			)
+		if ex.sideSkirts then
+			for _, side in { -1, 1 } do
+				make(
+					model,
+					"Part",
+					"SideSkirt",
+					Vector3.new(0.25, 0.4, L * 0.5),
+					CFrame.new(side * (W / 2 + 0.05), bottom + 0.2, 0),
+					TRIM
+				)
+			end
 		end
+
 	end
 
 	-- Underglow -----------------------------------------------------------
@@ -511,7 +650,7 @@ function CarBuilder.Build(carId, custom, display)
 		local seat = Instance.new("Seat")
 		seat.Name = "DriverSeat"
 		seat.Size = Vector3.new(1.6, 0.3, 1.6)
-		seat.CFrame = CFrame.new(-W * 0.18, -0.5, c.z + 0.2)
+		seat.CFrame = CFrame.new(b.seat or Vector3.new(-W * 0.18, -0.5, c.z + 0.2))
 		seat.Transparency = 1
 		seat.Anchored = false
 		seat.CanCollide = false

@@ -99,13 +99,17 @@ end
 
 function Customization.Default(carId)
 	local car = Cars.List[carId]
-	return {
+	local custom = {
 		paint = car and car.defaultPaint or "Racing Red",
 		accent = "Jet Black",
 		rim = "Silver",
 		glow = "None",
 		finish = "Glossy",
 	}
+	for key, value in (car and car.defaultCustom) or {} do
+		custom[key] = value
+	end
+	return custom
 end
 
 return Customization

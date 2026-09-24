@@ -104,7 +104,7 @@ function CustomizePanel.Init(gui, hud)
 				if not data then
 					return
 				end
-				local ok, reason = Customization.CanUse(option, data.level, data.passes and data.passes.VIP)
+				local ok, reason = Customization.CanUse(option, data.level, (data.passes and data.passes.VIP) or data.admin)
 				if not ok then
 					Notify.Show(option.id .. ": " .. reason, "error")
 					return
@@ -134,7 +134,7 @@ function CustomizePanel.Refresh()
 	local custom = data.custom[carId] or Customization.Default(carId)
 	viewport:SetCar(carId, custom)
 	carLabel.Text = string.upper(Cars.List[carId].name)
-	local isVip = data.passes and data.passes.VIP
+	local isVip = (data.passes and data.passes.VIP) or data.admin
 	for category, entries in swatches do
 		for optionId, entry in entries do
 			entry.stroke.Transparency = custom[category] == optionId and 0 or 1

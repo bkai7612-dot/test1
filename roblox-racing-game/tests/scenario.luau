@@ -318,6 +318,67 @@ check(State.data.maxLevel == Levels.MAX and State.data.level == Levels.MAX, "cli
 check(Config.Rewards.xpByPlace[1] > Config.Rewards.xpByPlace[2] and Config.Rewards.xpByPlace[2] > Config.Rewards.xpByPlace[3]
 	and Config.Rewards.xpByPlace[3] > Config.Rewards.xpFinish, "placement XP ordered 1st > 2nd > 3rd > finish")
 
+check(State.data.owned.Burger == true, "level 50 reward car granted")
+
+-- Admin code ------------------------------------------------------------------------------
+print("== admin code")
+local sha256 = G.require(roots.server.Sha256)
+check(sha256("abc") == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", "sha256 test vector")
+check(sha256("") == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "sha256 empty vector")
+local AdminCodes = G.require(roots.server.AdminCodes)
+local TEST_CODE = "TESTCODE2345ABCDEFGHJKMNP"
+check(#TEST_CODE == 25, "test code is 25 chars")
+AdminCodes.Codes[sha256(TEST_CODE)] = { id = "TEST_ADMIN", maxUses = 2 }
+d.level = 5
+d.xp = 0
+d.owned = { Hatch = true }
+d.selectedCar = "Hatch"
+check(req("Customize", "Hatch", "glow", "Rainbow") == false, "VIP glow locked before admin")
+check(req("RedeemCode", "testcode 2345abcdefghjkmnp") == true, "admin code redeemed (case/space-insensitive)")
+check(State.data.admin == true and State.data.level == Levels.MAX, "admin is level 50")
+local allOwned = true
+for _, carId in Cars.Order do
+	allOwned = allOwned and State.data.owned[carId] == true
+end
+check(allOwned, "admin owns every car")
+check(req("Customize", "Hatch", "glow", "Rainbow") == true, "admin can use VIP-only cosmetics")
+check(req("Customize", "Hatch", "finish", "Chrome") == true, "admin can use level-locked cosmetics")
+local okAgain, msgAgain = req("RedeemCode", TEST_CODE)
+check(okAgain == false, "same account can't redeem twice (" .. tostring(msgAgain) .. ")")
+local adminStore = G.memStore[AdminCodes.STORE]
+check(adminStore.TEST_ADMIN.uses == 1, "one global use recorded")
+adminStore.TEST_ADMIN = { uses = 2, users = { ["77"] = true, ["88"] = true } }
+d.codes.TEST_ADMIN = nil
+local okFull, msgFull = req("RedeemCode", TEST_CODE)
+check(okFull == false, "code rejected after 2 other accounts used it (" .. tostring(msgFull) .. ")")
+adminStore.TEST_ADMIN = { uses = 2, users = { ["1"] = true, ["88"] = true } }
+check(req("RedeemCode", TEST_CODE) == true, "account that already holds a use can re-redeem (new save)")
+check(adminStore.TEST_ADMIN.uses == 2, "re-redeem doesn't consume a use")
+local okBad = req("RedeemCode", "ZZZZZZZZZZZZZZZZZZZZZZZZZ")
+check(okBad == false, "wrong 25-char code rejected")
+
+-- Burger car ------------------------------------------------------------------------------
+print("== burger car")
+check(req("SelectCar", "Burger") == true, "select burger")
+waitFor(function()
+	return State.race.phase == "Intermission" or State.race.phase == "Waiting"
+end, 60, "lobby phase for test drive")
+check(req("TestDrive") == true, "burger test drive")
+G.run(0.5)
+local burger = CarService.Get(player)
+check(burger ~= nil and burger:FindFirstChild("TopBun") ~= nil and burger:FindFirstChild("Cheese") ~= nil, "burger body built")
+check(burger ~= nil and burger.DriverSeat.Occupant ~= nil, "driver in burger")
+local flames = 0
+for _, dsc in burger:GetDescendants() do
+	if dsc.Name == "NitroFlame" then
+		flames += 1
+	end
+end
+check(flames == 2, "fry exhausts have nitro flames")
+req("ExitCar")
+G.run(0.5)
+req("SelectCar", "Hatch")
+
 -- Save --------------------------------------------------------------------------------------
 print("== save")
 check(DataService.Save(player) == true, "save succeeded")

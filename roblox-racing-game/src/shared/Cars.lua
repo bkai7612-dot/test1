@@ -10,7 +10,7 @@
 --   nitro     seconds of boost in a full tank
 local Cars = {}
 
-Cars.Order = { "Hatch", "Rally", "Muscle", "Tuner", "Hyper" }
+Cars.Order = { "Hatch", "Rally", "Muscle", "Tuner", "Hyper", "Burger" }
 
 Cars.List = {
 	Hatch = {
@@ -146,6 +146,39 @@ Cars.List = {
 			cabin = { z = 0.2, length = 2.6, height = 2.0, inset = 1.0, windshield = 3.6, rear = 3.6 },
 			spoiler = "wing",
 			extras = { intakes = true, engineVents = true, splitter = true },
+		},
+	},
+	-- Level 50 reward. Can't be bought: it's given to every player who
+	-- reaches the level cap (see DataService.GrantRewardCars).
+	Burger = {
+		id = "Burger",
+		name = "Double Cheese Cruiser",
+		class = "Level 50 Legend",
+		inspiration = "A double cheeseburger. Seriously.",
+		description = "Only racers who reach level 50 get the keys. Fastest car in the game, with french-fry exhausts and a sesame-seed roof.",
+		price = 0,
+		level = 50,
+		reward = true,
+		defaultPaint = "Racing Red",
+		defaultCustom = { accent = "Sunburst Yellow", glow = "Gold", rim = "Gold" },
+		upgradeBase = 1500,
+		stats = { topSpeed = 180, accel = 78, handling = 2.7, grip = 9, brake = 125, nitro = 5.0 },
+		body = {
+			style = "burger",
+			length = 12, -- burger diameter
+			width = 9,
+			height = 5,
+			bottom = -0.6,
+			noseLen = 0,
+			noseDrop = 0,
+			wheelRadius = 1.3,
+			wheelWidth = 1.2,
+			wheelBase = 8.4,
+			track = 7.4,
+			cabin = { z = 0.8, length = 3, height = 2, inset = 1, windshield = 1, rear = 1 },
+			seat = Vector3.new(0, 2.3, 0.8), -- driver pops out of a hatch in the top bun
+			spoiler = "none",
+			extras = {},
 		},
 	},
 }

@@ -197,6 +197,9 @@ function Garage.Refresh()
 		elseif owned then
 			entry.sub.Text = "Owned"
 			entry.sub.TextColor3 = T.accent2
+		elseif car.reward then
+			entry.sub.Text = string.format("Level %d reward", car.level)
+			entry.sub.TextColor3 = T.gold
 		elseif data.level < car.level then
 			entry.sub.Text = string.format("Locked • Level %d", car.level)
 			entry.sub.TextColor3 = T.bad
@@ -228,8 +231,12 @@ function Garage.Refresh()
 		actionButton.Text = "SELECT"
 		actionButton.BackgroundColor3 = T.accent
 	elseif data.level < car.level then
-		actionButton.Text = string.format("REACH LEVEL %d", car.level)
+		actionButton.Text = car.reward and string.format("LEVEL %d REWARD", car.level)
+			or string.format("REACH LEVEL %d", car.level)
 		actionButton.BackgroundColor3 = T.locked
+	elseif car.reward then
+		actionButton.Text = "CLAIM"
+		actionButton.BackgroundColor3 = T.gold
 	else
 		actionButton.Text = "BUY • " .. Util.formatNumber(car.price) .. " COINS"
 		actionButton.BackgroundColor3 = data.coins >= car.price and T.accent or T.locked

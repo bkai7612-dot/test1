@@ -93,16 +93,16 @@ function LobbyBuilder.Build()
 
 	-- Showroom -----------------------------------------------------------------
 	local stageZ = -65
-	newPart(lobby, Vector3.new(160, 2, 44), CFrame.new(origin + Vector3.new(0, 1, stageZ)), rgb(30, 30, 36), Enum.Material.SmoothPlastic)
+	newPart(lobby, Vector3.new(190, 2, 44), CFrame.new(origin + Vector3.new(0, 1, stageZ)), rgb(30, 30, 36), Enum.Material.SmoothPlastic)
 	newPart(
 		lobby,
-		Vector3.new(160, 0.3, 1),
+		Vector3.new(190, 0.3, 1),
 		CFrame.new(origin + Vector3.new(0, 1.9, stageZ + 22)),
 		rgb(255, 120, 30),
 		Enum.Material.Neon,
 		{ visualOnly = true }
 	)
-	local wall = newPart(lobby, Vector3.new(170, 44, 2), CFrame.new(origin + Vector3.new(0, 22, stageZ - 24)), rgb(20, 20, 26), Enum.Material.SmoothPlastic)
+	local wall = newPart(lobby, Vector3.new(200, 44, 2), CFrame.new(origin + Vector3.new(0, 22, stageZ - 24)), rgb(20, 20, 26), Enum.Material.SmoothPlastic)
 	local _, wallBg = surfaceGui(wall, Enum.NormalId.Back, 10)
 	wallBg.BackgroundColor3 = rgb(16, 18, 26)
 	text(wallBg, Config.GAME_NAME, UDim2.fromScale(0.8, 0.3), UDim2.fromScale(0.1, 0.05), rgb(255, 130, 40))
@@ -117,7 +117,7 @@ function LobbyBuilder.Build()
 
 	for i, carId in Cars.Order do
 		local car = Cars.List[carId]
-		local x = (i - 3) * 30
+		local x = (i - (#Cars.Order + 1) / 2) * 30
 		local center = origin + Vector3.new(x, 2.25, stageZ)
 		newPart(
 			lobby,
@@ -152,7 +152,9 @@ function LobbyBuilder.Build()
 		text(board, car.name, UDim2.new(1, 0, 0.5, 0), UDim2.new(), Color3.new(1, 1, 1))
 		text(
 			board,
-			car.price == 0 and "STARTER CAR" or string.format("LV %d  •  %d COINS", car.level, car.price),
+			car.reward and string.format("LEVEL %d REWARD", car.level)
+				or car.price == 0 and "STARTER CAR"
+				or string.format("LV %d  •  %d COINS", car.level, car.price),
 			UDim2.new(1, 0, 0.35, 0),
 			UDim2.new(0, 0, 0.55, 0),
 			rgb(255, 170, 60),
