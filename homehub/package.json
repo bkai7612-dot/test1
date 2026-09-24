@@ -11,7 +11,8 @@
     "db:start": "supabase start",
     "db:reset": "supabase db reset",
     "format": "prettier --write src",
-    "format:check": "prettier --check src"
+    "format:check": "prettier --check src",
+    "build:demo": "vite build --config vite.demo.config.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.1",
@@ -31,6 +32,7 @@
     "supabase": "^2.117.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
-    "vite": "^8.3.1"
+    "vite": "^8.3.1",
+    "vite-plugin-singlefile": "^2.3.3"
   }
 }

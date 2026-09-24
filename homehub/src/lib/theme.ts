@@ -5,7 +5,10 @@ const media = typeof window !== 'undefined' ? window.matchMedia('(prefers-color-
 let current: ThemePreference = 'system';
 
 function render() {
-  const dark = current === 'dark' || (current === 'system' && Boolean(media?.matches));
+  // When embedded, a host page may pin its theme with data-theme on <html>.
+  const host = document.documentElement.dataset.theme;
+  const system = host === 'dark' || (host !== 'light' && Boolean(media?.matches));
+  const dark = current === 'dark' || (current === 'system' && system);
   document.documentElement.classList.toggle('dark', dark);
 }
 

@@ -82,12 +82,18 @@ Log in with the **development demo account** created by `supabase/seed.sql`:
 Or register a new account (email confirmation is off locally). Emails such as password resets are captured by Mailpit at
 http://127.0.0.1:54324.
 
+### Clickable prototype (no backend)
+
+`npm run build:demo` builds the real app against an in-browser mock backend (`src/demo/`) seeded with an example home,
+bundled into a single file at `dist-demo/index.html`. Useful for sharing the design; changes reset on reload.
+
 ### Useful scripts
 
 | Command | What it does |
 | --- | --- |
 | `npm run dev` | Start the Vite dev server |
 | `npm run build` | Type-check and build for production into `dist/` |
+| `npm run build:demo` | Build the self-contained prototype into `dist-demo/` |
 | `npm run typecheck` | TypeScript only |
 | `npm run format` | Format with Prettier (+ Tailwind class sorting) |
 | `npm run db:reset` | Recreate the local database from migrations and seed |

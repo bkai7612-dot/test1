@@ -1,6 +1,6 @@
 import { DOCUMENT_TYPES, IMAGE_TYPES, MAX_UPLOAD_BYTES } from './constants';
 import { FriendlyError } from './errors';
-import { STORAGE_BUCKET, supabase } from './supabase';
+import { STORAGE_BUCKET, supabase } from '@/lib/supabase';
 
 export type UploadKind = 'image' | 'document';
 

@@ -1,12 +1,12 @@
 import { lazy, Suspense, type ReactNode } from 'react';
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter, MemoryRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
 import { Spinner } from './components/ui/States';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CategoriesProvider } from './context/CategoriesContext';
 import { PropertyProvider } from './context/PropertyContext';
 import { ToastProvider } from './context/ToastContext';
-import { isSupabaseConfigured } from './lib/supabase';
+import { isSupabaseConfigured } from '@/lib/supabase';
 import { RequireProperty } from './pages/RequireProperty';
 import { SetupRequired } from './pages/SetupRequired';
 
@@ -131,10 +131,13 @@ function AppRoutes() {
   );
 }
 
+// The prototype build runs inside a sandboxed frame, so it keeps routes in memory.
+const Router = import.meta.env.VITE_DEMO ? MemoryRouter : BrowserRouter;
+
 export default function App() {
   if (!isSupabaseConfigured) return <SetupRequired />;
   return (
-    <BrowserRouter>
+    <Router>
       <ToastProvider>
         <AuthProvider>
           <CategoriesProvider>
@@ -144,6 +147,6 @@ export default function App() {
           </CategoriesProvider>
         </AuthProvider>
       </ToastProvider>
-    </BrowserRouter>
+    </Router>
   );
 }

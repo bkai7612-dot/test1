@@ -262,7 +262,11 @@ export function DocumentViewModal({ document, onClose, onEdit, onDeleted, attach
     setDownloading(true);
     try {
       const href = await getDownloadUrl(document.file_path, document.file_name ?? document.name);
-      window.location.assign(href);
+      const a = window.document.createElement('a');
+      a.href = href;
+      a.download = document.file_name ?? document.name;
+      a.rel = 'noopener';
+      a.click();
     } catch (err) {
       toast.error(err);
     } finally {

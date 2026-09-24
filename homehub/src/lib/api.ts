@@ -1,6 +1,6 @@
 import { unwrap } from './errors';
 import { removeFiles, uploadFile } from './storage';
-import { supabase } from './supabase';
+import { supabase } from '@/lib/supabase';
 import type { HomeDocument, LinkKey, Photo } from './types';
 
 export type Table =
