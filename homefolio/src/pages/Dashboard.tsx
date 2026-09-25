@@ -33,6 +33,8 @@ import { supabase } from '@/lib/supabase';
 import type { Property, PropertySummary, Reminder, ReminderKind } from '@/lib/types';
 import { PropertyFormModal } from './Properties';
 import { SponsoredCard } from '@/components/SponsoredCard';
+import { GettingStarted } from '@/components/help/GettingStarted';
+import { HelpButton } from '@/components/help/HelpButton';
 
 const REMINDER_ICONS: Record<ReminderKind, LucideIcon> = {
   maintenance: Wrench,
@@ -89,17 +91,21 @@ export default function Dashboard() {
   const name = profile?.full_name?.split(' ')[0];
   return (
     <div className="space-y-6">
-      <div>
-        <p className="text-muted text-sm font-medium tracking-wide uppercase">Welcome back</p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
-          {greeting()}
-          {name ? `, ${name}` : ''}
-        </h1>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-muted text-sm font-medium tracking-wide uppercase">Welcome back</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
+            {greeting()}
+            {name ? `, ${name}` : ''}
+          </h1>
+        </div>
+        <HelpButton />
       </div>
       <PropertyCard property={active} />
+      <GettingStarted propertyId={active.id} />
       <QuickActions />
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        <div className="min-w-0 lg:col-span-3">
+        <div className="min-w-0 lg:col-span-3" data-tour="upcoming">
           <Upcoming propertyId={active.id} />
         </div>
         <div className="min-w-0 lg:col-span-2">
@@ -115,6 +121,7 @@ function PropertyCard({ property }: { property: Property }) {
   return (
     <Link
       to={`/properties/${property.id}`}
+      data-tour="property-card"
       className="border-line bg-surface hover:border-brand-300 flex items-center gap-4 rounded-2xl border p-4 transition-colors sm:p-5"
     >
       <span className="bg-brand-600 flex size-12 shrink-0 items-center justify-center rounded-xl text-white">
@@ -135,7 +142,7 @@ function PropertyCard({ property }: { property: Property }) {
 
 function QuickActions() {
   return (
-    <section aria-labelledby="quick-actions">
+    <section aria-labelledby="quick-actions" data-tour="quick-actions">
       <h2 id="quick-actions" className="text-muted mb-3 text-sm font-semibold tracking-wide uppercase">
         Quick actions
       </h2>

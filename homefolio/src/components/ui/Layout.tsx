@@ -2,6 +2,7 @@ import { ChevronLeft, Search } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/cn';
+import { HelpButton } from '../help/HelpButton';
 import { controlClass } from './Field';
 
 interface PageHeaderProps {
@@ -28,7 +29,14 @@ export function PageHeader({ title, description, actions, back }: PageHeaderProp
           <h1 className="text-ink text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
           {description && <div className="text-muted mt-1 text-sm sm:text-base">{description}</div>}
         </div>
-        {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+        <div className="flex flex-wrap items-center gap-2">
+          <HelpButton />
+          {actions && (
+            <div className="flex flex-wrap gap-2" data-tour="page-actions">
+              {actions}
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );

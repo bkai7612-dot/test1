@@ -20,6 +20,7 @@ export function PropertySwitcher({ compact }: { compact?: boolean }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
+        data-tour="switcher"
         className={cn(
           'hover:bg-surface-muted flex min-w-0 items-center gap-2.5 rounded-xl text-left transition-colors',
           compact ? 'max-w-[60vw] px-2 py-1.5' : 'border-line bg-surface w-full border px-3 py-2.5',

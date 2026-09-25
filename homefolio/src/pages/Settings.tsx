@@ -1,5 +1,6 @@
 import {
   Bell,
+  CircleHelp,
   Crown,
   Download,
   Palette,
@@ -21,6 +22,7 @@ import { Field, Input, Select, Toggle } from '@/components/ui/Field';
 import { Chips, PageHeader } from '@/components/ui/Layout';
 import { FormError } from '@/components/ui/States';
 import { PasswordInput } from './auth/AuthLayout';
+import { useTour } from '@/components/help/Tour';
 import { useAuth, useUser } from '@/context/AuthContext';
 import { useCategories } from '@/context/CategoriesContext';
 import { useProperties } from '@/context/PropertyContext';
@@ -299,6 +301,23 @@ const EXPORT_TABLES: Table[] = [
   'custom_categories',
 ];
 
+function HelpSection() {
+  const { start } = useTour();
+  return (
+    <Section title="Help & tutorials" icon={CircleHelp}>
+      <p className="text-muted mb-3 text-sm">Step-by-step guides for every page, and the one-minute tour.</p>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="secondary" size="sm" onClick={start}>
+          Replay the tour
+        </Button>
+        <LinkButton to="/help" variant="secondary" size="sm">
+          All guides
+        </LinkButton>
+      </div>
+    </Section>
+  );
+}
+
 function DataSection() {
   const { properties, reload, setActive } = useProperties();
   const toast = useToast();
@@ -439,6 +458,7 @@ export default function Settings() {
         </div>
         <div className="space-y-4">
           <PreferencesSection />
+          <HelpSection />
           <DataSection />
           <DangerSection />
         </div>

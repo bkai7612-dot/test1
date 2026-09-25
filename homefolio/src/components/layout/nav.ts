@@ -1,5 +1,6 @@
 import {
   Building2,
+  CircleHelp,
   DoorOpen,
   FileText,
   Gauge,
@@ -77,8 +78,16 @@ export const SETTINGS_ITEM: NavItem = {
   description: 'Account and preferences',
 };
 
+export const HELP_ITEM: NavItem = {
+  to: '/help',
+  label: 'Help & tutorials',
+  icon: CircleHelp,
+  description: 'Step-by-step guides and the tour',
+};
+
 /** Shown on the mobile "More" page — everything not in the bottom bar. */
 export const MORE_ITEMS: NavItem[] = [
   ...NAV_GROUPS.flatMap((g) => g.items).filter((i) => !['/', '/properties', '/maintenance', '/documents'].includes(i.to)),
+  HELP_ITEM,
   SETTINGS_ITEM,
 ];

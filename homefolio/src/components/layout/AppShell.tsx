@@ -6,7 +6,7 @@ import { useProperties } from '@/context/PropertyContext';
 import { cn } from '@/lib/cn';
 import { Spinner } from '../ui/States';
 import { Logo } from './Logo';
-import { NAV_GROUPS, SETTINGS_ITEM, type NavItem } from './nav';
+import { HELP_ITEM, NAV_GROUPS, SETTINGS_ITEM, type NavItem } from './nav';
 import { PropertySwitcher } from './PropertySwitcher';
 
 function SidebarLink({ item }: { item: NavItem }) {
@@ -40,7 +40,7 @@ function Sidebar() {
       <div className="px-3 pb-3">
         <PropertySwitcher />
       </div>
-      <nav aria-label="Main" className="flex-1 space-y-3 overflow-y-auto px-3 pb-3">
+      <nav aria-label="Main" data-tour="nav" className="flex-1 space-y-3 overflow-y-auto px-3 pb-3">
         {NAV_GROUPS.map((group, i) => (
           <div key={i}>
             {group.label && (
@@ -55,6 +55,7 @@ function Sidebar() {
         ))}
       </nav>
       <div className="border-line space-y-0.5 border-t p-2">
+        <SidebarLink item={HELP_ITEM} />
         <SidebarLink item={SETTINGS_ITEM} />
         <button
           type="button"
@@ -86,6 +87,7 @@ function BottomNav() {
   return (
     <nav
       aria-label="Main"
+      data-tour="nav"
       className="pb-safe border-line bg-surface/95 fixed inset-x-0 bottom-0 z-30 border-t backdrop-blur lg:hidden"
     >
       <ul className="mx-auto grid max-w-lg grid-cols-5">
@@ -126,6 +128,7 @@ function TopBar() {
         </div>
         <Link
           to="/search"
+          data-tour="search"
           className="border-line bg-surface text-muted hover:text-ink ml-auto flex min-h-10 items-center gap-2 rounded-xl border px-3 text-sm transition-colors lg:ml-0 lg:w-80"
           aria-label="Search your home"
         >

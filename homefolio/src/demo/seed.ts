@@ -99,6 +99,7 @@ export function createSeed({ sample = false }: { sample?: boolean } = {}): Store
       plan_expires_at: null,
       plan_source: demoPlus() ? 'promo' : null,
       is_admin: true,
+      tour_completed_at: null,
     });
     const today = new Date();
     const inDays = (n: number) => iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() + n));

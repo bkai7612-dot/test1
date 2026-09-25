@@ -1,7 +1,12 @@
 import { Eye, EyeOff } from 'lucide-react';
-import { useState, type InputHTMLAttributes, type ReactNode } from 'react';
+import { lazy, Suspense, useState, type InputHTMLAttributes, type ReactNode } from 'react';
 import { LogoMark } from '@/components/layout/Logo';
 import { Input } from '@/components/ui/Field';
+
+// Prototype-only note; compiled out of the real apps.
+const DemoAuthNotice = import.meta.env.VITE_DEMO
+  ? lazy(() => import('@/demo/DemoControls').then((m) => ({ default: m.DemoAuthNotice })))
+  : null;
 
 export function AuthLayout({
   title,
@@ -22,6 +27,11 @@ export function AuthLayout({
           <h1 className="mt-5 text-2xl font-semibold tracking-tight">{title}</h1>
           {subtitle && <p className="text-muted mt-1.5 text-sm">{subtitle}</p>}
         </div>
+        {DemoAuthNotice && (
+          <Suspense fallback={null}>
+            <DemoAuthNotice />
+          </Suspense>
+        )}
         <div className="border-line bg-surface rounded-2xl border p-5 shadow-sm sm:p-6">{children}</div>
         {footer && <div className="text-muted mt-6 text-center text-sm">{footer}</div>}
       </div>

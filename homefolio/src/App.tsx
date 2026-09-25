@@ -2,6 +2,7 @@ import { lazy, Suspense, type ReactNode } from 'react';
 import { BrowserRouter, HashRouter, MemoryRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
 import { NativeBridge } from './components/NativeBridge';
+import { TourProvider } from './components/help/Tour';
 import { Spinner } from './components/ui/States';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CategoriesProvider } from './context/CategoriesContext';
@@ -39,7 +40,10 @@ const Settings = lazy(() => import('./pages/Settings'));
 const More = lazy(() => import('./pages/More'));
 const Upgrade = lazy(() => import('./pages/Upgrade'));
 const Admin = lazy(() => import('./pages/Admin'));
+const Help = lazy(() => import('./pages/Help'));
 const NotFound = lazy(() => import('./pages/NotFound'));
+// Prototype-only menu; compiled out of the real apps.
+const DemoMenu = import.meta.env.VITE_DEMO ? lazy(() => import('./demo/DemoControls')) : null;
 
 function FullScreenSpinner() {
   return (
@@ -129,6 +133,7 @@ function AppRoutes() {
           <Route path="more" element={<More />} />
           <Route path="upgrade" element={<Upgrade />} />
           <Route path="admin" element={<Admin />} />
+          <Route path="help" element={<Help />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
@@ -148,7 +153,14 @@ export default function App() {
         <AuthProvider>
           <CategoriesProvider>
             <PropertyProvider>
-              <AppRoutes />
+              <TourProvider>
+                <AppRoutes />
+                {DemoMenu && (
+                  <Suspense fallback={null}>
+                    <DemoMenu />
+                  </Suspense>
+                )}
+              </TourProvider>
               <NativeBridge />
             </PropertyProvider>
           </CategoriesProvider>

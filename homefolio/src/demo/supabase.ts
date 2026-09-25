@@ -10,9 +10,108 @@ export const isSupabaseConfigured = true;
 export const STORAGE_BUCKET = 'homefolio';
 export const SITE_URL = 'https://app.homefolio.co.uk';
 
-let store: Store = createSeed();
+let store: Store = { __files: [] } as unknown as Store;
 const files = new Map<string, string>(); // storage path → blob URL
-for (const [path, url] of store.__files) files.set(path, url);
+const fileData = new Map<string, string>(); // storage path → data URL, for saving between visits
+
+// ---------------------------------------------------------------------------
+// Saving: each visitor's prototype lives in their own browser (localStorage),
+// so testers can come back to what they entered. Files over 1.5 MB are kept
+// for the visit only.
+// ---------------------------------------------------------------------------
+
+const SAVE_KEY = 'homefolio-prototype-v1';
+const MAX_SAVED_FILE = 1.5 * 1024 * 1024;
+
+interface Saved {
+  store: Store;
+  files: Record<string, string>;
+  email: string | null;
+}
+
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [head, body] = dataUrl.split(',');
+  const mime = head.match(/data:([^;]+)/)?.[1] ?? 'application/octet-stream';
+  const bytes = Uint8Array.from(atob(body), (c) => c.charCodeAt(0));
+  return new Blob([bytes], { type: mime });
+}
+
+const blobToDataUrl = (blob: Blob) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+
+function loadSaved(): Saved | null {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    return raw ? (JSON.parse(raw) as Saved) : null;
+  } catch {
+    return null;
+  }
+}
+
+let saveTimer: ReturnType<typeof setTimeout> | undefined;
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => void save(), 300);
+}
+
+async function save() {
+  // Capture any files not yet converted (new uploads, a freshly created example home).
+  for (const [path, url] of files) {
+    if (fileData.has(path)) continue;
+    try {
+      const blob = await (await fetch(url)).blob();
+      if (blob.size <= MAX_SAVED_FILE) fileData.set(path, await blobToDataUrl(blob));
+    } catch {
+      // Unreadable blob: it stays for this visit only.
+    }
+  }
+  const snapshot = (withFiles: boolean) =>
+    JSON.stringify({
+      store: { ...store, __files: [] },
+      files: withFiles ? Object.fromEntries([...fileData].filter(([p]) => files.has(p))) : {},
+      email: session?.user.email ?? null,
+    } satisfies Saved);
+  try {
+    localStorage.setItem(SAVE_KEY, snapshot(true));
+  } catch {
+    try {
+      localStorage.setItem(SAVE_KEY, snapshot(false)); // Over quota: keep the records, drop the files.
+    } catch {
+      // Storage blocked (private window): the prototype still works for this visit.
+    }
+  }
+}
+
+function loadFiles(entries: Iterable<[string, string]>) {
+  for (const [path, url] of entries) {
+    if (url.startsWith('data:')) {
+      fileData.set(path, url);
+      files.set(path, URL.createObjectURL(dataUrlToBlob(url)));
+    } else files.set(path, url);
+  }
+}
+
+function replaceStore(seed: Store) {
+  store = seed;
+  files.clear();
+  fileData.clear();
+  loadFiles(seed.__files);
+}
+
+const saved = loadSaved();
+if (saved) {
+  store = saved.store;
+  try {
+    loadFiles(Object.entries(saved.files));
+  } catch {
+    // A damaged file entry shouldn't stop the prototype from opening.
+  }
+}
 
 const uuid = () => crypto.randomUUID();
 const nowIso = () => new Date().toISOString();
@@ -218,6 +317,7 @@ class Query implements PromiseLike<unknown> {
         rows = this.matches();
     }
 
+    if (this.mode !== 'select') scheduleSave();
     if (this.mode !== 'select' && !this.returning) return ok(null);
     const total = rows.length;
     rows = this.sort(rows);
@@ -561,7 +661,7 @@ const RPC: Record<string, (args: Row) => unknown> = {
     if (table('properties').some((p) => p.is_sample)) throw { message: 'You already have a sample home', code: 'P0001' };
     const extra = createSeed({ sample: true });
     for (const [k, rows] of Object.entries(extra)) if (k !== '__files') table(k).push(...(rows as Row[]));
-    for (const [path, url] of extra.__files) files.set(path, url);
+    loadFiles(extra.__files);
     return (extra.properties as Row[])[0].id;
   },
   storage_status: () => {
@@ -594,7 +694,7 @@ const RPC: Record<string, (args: Row) => unknown> = {
       };
     }),
   delete_my_account: () => {
-    store = { __files: [] } as unknown as Store;
+    replaceStore({ __files: [] } as unknown as Store);
     return null;
   },
 };
@@ -617,8 +717,11 @@ const makeSession = (email: string) => ({
     created_at: '2025-01-01T09:00:00Z',
   },
 });
-let session: ReturnType<typeof makeSession> | null = makeSession(DEMO_USER.email);
-const emit = (event: string) => setTimeout(() => listeners.forEach((l) => l(event, session)), 0);
+let session: ReturnType<typeof makeSession> | null = saved?.email ? makeSession(saved.email) : null;
+const emit = (event: string) => {
+  scheduleSave();
+  setTimeout(() => listeners.forEach((l) => l(event, session)), 0);
+};
 const delay = <T>(v: T) => new Promise<T>((r) => setTimeout(() => r(v), 250));
 
 const auth = {
@@ -630,14 +733,14 @@ const auth = {
   async signInWithPassword({ email, password }: { email: string; password: string }) {
     if (!password || password.length < 6)
       return delay({ data: { session: null, user: null }, error: { message: 'Invalid login credentials', status: 400 } });
-    if (!table('profiles').length) store = createSeed();
+    if (!table('profiles').length) replaceStore(createSeed());
     session = makeSession(email);
     emit('SIGNED_IN');
     return delay({ data: { session, user: session.user }, error: null });
   },
   async signUp({ email, options }: { email: string; password: string; options?: { data?: { full_name?: string } } }) {
     // A fresh account: empty store so the first-run experience is shown.
-    store = {
+    replaceStore({
       __files: [],
       profiles: [
         {
@@ -647,6 +750,7 @@ const auth = {
           plan_expires_at: null,
           plan_source: null,
           is_admin: false,
+          tour_completed_at: null,
           theme: 'system',
           reminder_window_days: 120,
           remind_maintenance: true,
@@ -655,7 +759,7 @@ const auth = {
           remind_contracts: true,
         },
       ],
-    } as unknown as Store;
+    } as unknown as Store);
     session = makeSession(email);
     emit('SIGNED_IN');
     return delay({ data: { session, user: session.user }, error: null });
@@ -680,6 +784,7 @@ const storage = {
   from: () => ({
     async upload(path: string, body: Blob) {
       files.set(path, URL.createObjectURL(body));
+      scheduleSave();
       return delay({ data: { path }, error: null });
     },
     async createSignedUrls(paths: string[]) {
@@ -692,7 +797,11 @@ const storage = {
       return { data: { signedUrl: files.get(path) ?? '' }, error: null };
     },
     async remove(paths: string[]) {
-      paths.forEach((p) => files.delete(p));
+      paths.forEach((p) => {
+        files.delete(p);
+        fileData.delete(p);
+      });
+      scheduleSave();
       return { data: [], error: null };
     },
   }),
@@ -703,7 +812,10 @@ export const supabase = {
   rpc: async (name: string, args: Row = {}) => {
     await new Promise((r) => setTimeout(r, 150));
     try {
-      return ok(RPC[name](args));
+      const result = ok(RPC[name](args));
+      if (!['property_summary', 'upcoming_reminders', 'search_home', 'storage_status', 'ad_report'].includes(name))
+        scheduleSave();
+      return result;
     } catch (e) {
       return { data: null, error: e };
     }
@@ -711,3 +823,29 @@ export const supabase = {
   auth,
   storage,
 };
+
+// ---------------------------------------------------------------------------
+// Prototype controls (used by src/demo/DemoControls.tsx)
+// ---------------------------------------------------------------------------
+
+/** Signs in to a fresh copy of the example home, with the welcome tour. */
+export async function exploreExampleHome() {
+  replaceStore(createSeed());
+  session = makeSession(DEMO_USER.email);
+  emit('SIGNED_IN');
+  clearTimeout(saveTimer);
+  await save();
+}
+
+/** Forgets everything this browser saved and returns to the sign-in screen. */
+export async function resetPrototype() {
+  replaceStore({ __files: [] } as unknown as Store);
+  session = null;
+  clearTimeout(saveTimer);
+  try {
+    localStorage.removeItem(SAVE_KEY);
+  } catch {
+    // Nothing saved.
+  }
+  setTimeout(() => listeners.forEach((l) => l('SIGNED_OUT', null)), 0);
+}

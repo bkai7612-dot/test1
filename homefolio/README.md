@@ -34,6 +34,7 @@ Storage).
 | Emergency | Your important contacts, household emergency contacts, insurance claims lines, plus UK national numbers (tap to call — never automatic) |
 | Search | One search across appliances, inventory, documents, maintenance, warranties, rooms, utilities, insurance and contacts — in the current property or all properties |
 | Settings | Plan and storage, account, password, appearance (system / light / dark), reminder preferences, custom categories, data download (JSON), sample home, delete account |
+| Help & tutorials | One-minute welcome tour (once per account, replay any time), a "Getting started" checklist on the Home screen, a "How it works" step-by-step guide on every page (`src/lib/guides.ts`) and a searchable Help page |
 | Homefolio Plus | Free plan: 1 property, 1 GB, sponsored cards. Plus (monthly, yearly, lifetime) via App Store, Google Play or Stripe through RevenueCat; unlocks unlimited properties, 25 GB, no sponsored cards |
 | Sponsored cards | One small, clearly labelled card on some pages for free users; chosen by page, anonymous daily view/click totals; managed on the admin page |
 | Phone features | Reminder notifications, camera, share sheet, Android back button |
@@ -91,7 +92,8 @@ http://127.0.0.1:54324.
 ### Clickable prototype (no backend)
 
 `npm run build:demo` builds the real app against an in-browser mock backend (`src/demo/`) seeded with an example home,
-bundled into a single file at `dist-demo/index.html`. Useful for sharing the design; changes reset on reload.
+bundled into a single file at `dist-demo/index.html`. Testers sign up with any email (or open the example home);
+what they add is saved in their own browser, and a "Prototype" button lets them replay the tour or start again.
 
 ### Desktop and phone apps
 

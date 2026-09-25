@@ -22,6 +22,8 @@ export interface Profile extends Timestamps {
   plan_expires_at: string | null;
   plan_source: string | null;
   is_admin: boolean;
+  /** When the welcome tour was finished or skipped; null shows it again. */
+  tour_completed_at: string | null;
 }
 
 export type ThemePreference = 'system' | 'light' | 'dark';
