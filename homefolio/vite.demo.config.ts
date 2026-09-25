@@ -14,6 +14,11 @@ export default defineConfig({
   resolve: {
     alias: [
       { find: /^@\/lib\/supabase$/, replacement: fileURLToPath(new URL('./src/demo/supabase.ts', import.meta.url)) },
+      // Payment and native-shell SDKs are never used in the prototype; keep them out of the bundle.
+      {
+        find: /^(@revenuecat\/.*|@tauri-apps\/plugin-.*|@capacitor\/(?!core$).*)$/,
+        replacement: fileURLToPath(new URL('./src/demo/stub.ts', import.meta.url)),
+      },
       { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
     ],
   },
