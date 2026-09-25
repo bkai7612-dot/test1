@@ -312,6 +312,38 @@ end
 req("ExitCar")
 G.run(0.3)
 
+print("== drag to turn the preview")
+do
+	local Viewport = G.require(roots.client.UI.Viewport)
+	local holder = G.Instance.new("Frame")
+	local v = Viewport.new(holder, {})
+	v:SetCar("Hatch", nil)
+	local UIS = game:GetService("UserInputService")
+	local a0, p0 = v.angle, v.pitch
+	local press = { UserInputType = G.Enum.UserInputType.MouseButton1, Position = Vector3.new(100, 100, 0) }
+	v.frame.InputBegan:Fire(press)
+	UIS.InputChanged:Fire({ UserInputType = G.Enum.UserInputType.MouseMovement, Position = Vector3.new(160, 80, 0) })
+	G.run(0.1)
+	check(math.abs((v.angle - a0) - (-60 * 0.012)) < 0.05, "dragging right turns the car")
+	check(v.pitch < p0, "dragging up tilts the view")
+	local held = v.angle
+	G.run(2)
+	check(math.abs(v.angle - held) < 1e-6, "auto-spin paused while dragging")
+	UIS.InputEnded:Fire(press)
+	G.run(2)
+	check(math.abs(v.angle - held) < 1e-6, "auto-spin still paused just after letting go")
+	G.run(4)
+	check(v.angle > held, "auto-spin resumes after a few seconds")
+	v.frame.InputChanged:Fire({ UserInputType = G.Enum.UserInputType.MouseWheel, Position = Vector3.new(0, 0, 3) })
+	G.run(0.1)
+	check(v.zoom < 1, "scrolling zooms in")
+	for _ = 1, 40 do
+		v:Rotate(0, -500)
+	end
+	check(v.pitch >= 0.05 - 1e-6, "tilt is clamped above the floor")
+	v:Destroy()
+end
+
 print("== robot visor")
 do
 	local CarBuilder = G.require(Shared.CarBuilder)
