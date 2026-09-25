@@ -1,7 +1,7 @@
-import { unwrap } from './errors';
+import { FriendlyError, unwrap } from './errors';
 import { removeFiles, uploadFile } from './storage';
 import { supabase } from '@/lib/supabase';
-import type { HomeDocument, LinkKey, Photo } from './types';
+import type { HomeDocument, LinkKey, Photo, StorageStatus } from './types';
 
 export type Table =
   | 'properties'
@@ -20,7 +20,8 @@ export type Table =
   | 'photos'
   | 'custom_fields'
   | 'custom_categories'
-  | 'profiles';
+  | 'profiles'
+  | 'ad_campaigns';
 
 export type Values = Record<string, unknown>;
 
@@ -58,12 +59,28 @@ export interface Link {
   id: string;
 }
 
+/** Checks the user's storage allowance before uploading, so nothing is sent that would be refused. */
+export async function ensureStorageFor(bytes: number): Promise<void> {
+  const { data, error } = await supabase.rpc('storage_status');
+  if (error || !data) return; // The database still enforces the limit.
+  const status = data as StorageStatus;
+  if (status.used + bytes > status.limit) {
+    throw new FriendlyError(
+      status.plus
+        ? "You've used all 25 GB of your storage. Delete some files to make room."
+        : "You've used your 1 GB of free storage. Upgrade to Homefolio Plus for 25 GB.",
+    );
+  }
+}
+
 export async function addPhoto(userId: string, propertyId: string, file: File, link?: Link): Promise<Photo> {
+  await ensureStorageFor(file.size);
   const uploaded = await uploadFile(userId, propertyId, `photos/${FOLDERS[link?.key ?? 'property']}`, file, 'image');
   try {
     return await insertRow<Photo>('photos', {
       property_id: propertyId,
       file_path: uploaded.path,
+      size_bytes: uploaded.size,
       ...(link ? { [link.key]: link.id } : {}),
     });
   } catch (err) {
@@ -86,6 +103,7 @@ export interface NewDocument {
 
 export async function addDocument(userId: string, propertyId: string, file: File, meta: NewDocument): Promise<HomeDocument> {
   const folder = `documents/${FOLDERS[meta.link?.key ?? 'property']}`;
+  await ensureStorageFor(file.size);
   const uploaded = await uploadFile(userId, propertyId, folder, file, 'document');
   try {
     return await insertRow<HomeDocument>('documents', {

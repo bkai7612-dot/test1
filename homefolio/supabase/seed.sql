@@ -13,7 +13,7 @@ insert into auth.users (
   now(),
   '{"provider": "email", "providers": ["email"]}',
   '{"full_name": "Kai"}',
-  now(), now(), '', '', '', ''
+  now() - interval '30 days', now(), '', '', '', ''
 );
 
 insert into auth.identities (id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at)

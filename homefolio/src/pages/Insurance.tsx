@@ -1,4 +1,5 @@
 import { Plus, Umbrella } from 'lucide-react';
+import { SponsoredCard } from '@/components/SponsoredCard';
 import { FormModal, toFormValues } from '@/components/forms/EntityForm';
 import { StatusBadge } from '@/components/ui/Badges';
 import { Button } from '@/components/ui/Button';
@@ -123,6 +124,7 @@ export default function Insurance() {
           })}
         </Grid>
       )}
+      <SponsoredCard placement="insurance" className="mt-6" />
       <InsuranceFormModal
         open={editor.isOpen}
         onClose={editor.close}

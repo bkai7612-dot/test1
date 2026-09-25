@@ -8,3 +8,4 @@ supabase/.branches
 *.log
 .DS_Store
 dist-demo
+supabase/functions/.env

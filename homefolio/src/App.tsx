@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ReactNode } from 'react';
-import { BrowserRouter, MemoryRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter, HashRouter, MemoryRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
+import { NativeBridge } from './components/NativeBridge';
 import { Spinner } from './components/ui/States';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CategoriesProvider } from './context/CategoriesContext';
@@ -36,6 +37,8 @@ const Emergency = lazy(() => import('./pages/Emergency'));
 const Search = lazy(() => import('./pages/Search'));
 const Settings = lazy(() => import('./pages/Settings'));
 const More = lazy(() => import('./pages/More'));
+const Upgrade = lazy(() => import('./pages/Upgrade'));
+const Admin = lazy(() => import('./pages/Admin'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 function FullScreenSpinner() {
@@ -124,6 +127,8 @@ function AppRoutes() {
           <Route path="search" element={<Search />} />
           <Route path="settings" element={<Settings />} />
           <Route path="more" element={<More />} />
+          <Route path="upgrade" element={<Upgrade />} />
+          <Route path="admin" element={<Admin />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
@@ -131,8 +136,9 @@ function AppRoutes() {
   );
 }
 
-// The prototype build runs inside a sandboxed frame, so it keeps routes in memory.
-const Router = import.meta.env.VITE_DEMO ? MemoryRouter : BrowserRouter;
+// The prototype runs inside a sandboxed frame, so it keeps routes in memory.
+// The Windows app has no address bar, so it uses #/routes, which survive a reload (F5).
+const Router = import.meta.env.VITE_DEMO ? MemoryRouter : import.meta.env.MODE === 'desktop' ? HashRouter : BrowserRouter;
 
 export default function App() {
   if (!isSupabaseConfigured) return <SetupRequired />;
@@ -143,6 +149,7 @@ export default function App() {
           <CategoriesProvider>
             <PropertyProvider>
               <AppRoutes />
+              <NativeBridge />
             </PropertyProvider>
           </CategoriesProvider>
         </AuthProvider>

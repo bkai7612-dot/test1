@@ -6,6 +6,8 @@ import { useSignedUrls } from '@/hooks/useData';
 import { useQuery } from '@/hooks/useQuery';
 import { addPhoto, removePhoto, type Link } from '@/lib/api';
 import { unwrap } from '@/lib/errors';
+import { takeOrPickPhoto } from '@/lib/native';
+import { isNative } from '@/lib/platform';
 import { supabase } from '@/lib/supabase';
 import type { LinkKey, Photo } from '@/lib/types';
 import { Button } from '../ui/Button';
@@ -67,7 +69,24 @@ export function PhotoGallery({ propertyId, link, title = 'Photos', itemName }: P
     <Section
       title={title}
       icon={ImageIcon}
-      action={<FileButton accept="image/*" multiple onFiles={upload} label="Add photos" icon={Camera} loading={uploading} />}
+      action={
+        isNative ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={Camera}
+            loading={uploading}
+            onClick={async () => {
+              const file = await takeOrPickPhoto();
+              if (file) await upload([file]);
+            }}
+          >
+            Add photo
+          </Button>
+        ) : (
+          <FileButton accept="image/*" multiple onFiles={upload} label="Add photos" icon={Camera} loading={uploading} />
+        )
+      }
     >
       {loading && !data ? (
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">

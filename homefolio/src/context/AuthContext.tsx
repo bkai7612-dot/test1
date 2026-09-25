@@ -13,6 +13,8 @@ interface AuthState {
   /** True after arriving from a password-reset email link. */
   recovering: boolean;
   updateProfile: (values: Partial<Profile>) => Promise<void>;
+  /** Re-reads the profile, e.g. after a purchase updates the plan on the server. */
+  refreshProfile: () => Promise<Profile | null>;
   signOut: () => Promise<void>;
 }
 
@@ -74,13 +76,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [userId],
   );
 
+  const refreshProfile = useCallback(async () => {
+    if (!userId) return null;
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+    const p = data as Profile | null;
+    if (p) setProfile(p);
+    return p;
+  }, [userId]);
+
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
   }, []);
 
   const value = useMemo<AuthState>(
-    () => ({ session, user: session?.user ?? null, profile, loading, recovering, updateProfile, signOut }),
-    [session, profile, loading, recovering, updateProfile, signOut],
+    () => ({ session, user: session?.user ?? null, profile, loading, recovering, updateProfile, refreshProfile, signOut }),
+    [session, profile, loading, recovering, updateProfile, refreshProfile, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

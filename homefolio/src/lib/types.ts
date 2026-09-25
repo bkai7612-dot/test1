@@ -18,6 +18,10 @@ export interface Profile extends Timestamps {
   remind_warranties: boolean;
   remind_insurance: boolean;
   remind_contracts: boolean;
+  plan: 'free' | 'plus';
+  plan_expires_at: string | null;
+  plan_source: string | null;
+  is_admin: boolean;
 }
 
 export type ThemePreference = 'system' | 'light' | 'dark';
@@ -197,6 +201,7 @@ export interface Photo extends Owned {
   meter_reading_id: string | null;
   file_path: string;
   caption: string | null;
+  size_bytes: number | null;
 }
 
 export type CustomFieldEntity = 'property' | 'room' | 'appliance' | 'inventory';
@@ -258,4 +263,31 @@ export interface SearchResult {
   title: string;
   subtitle: string | null;
   property_id: string;
+}
+
+export type AdPlacement = 'dashboard' | 'maintenance' | 'appliances' | 'utilities' | 'insurance';
+
+export interface AdCampaign {
+  id: string;
+  advertiser: string;
+  placement: AdPlacement;
+  headline: string;
+  body: string | null;
+  cta_label: string;
+  url: string;
+  logo_url: string | null;
+  starts_on: string;
+  ends_on: string;
+  weight: number;
+  active: boolean;
+  price_per_month: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StorageStatus {
+  used: number;
+  limit: number;
+  plus: boolean;
 }

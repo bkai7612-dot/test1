@@ -1,0 +1,85 @@
+# Builds the iPhone/iPad app on a GitHub-hosted Mac and uploads it to
+# App Store Connect (it appears in TestFlight). No Mac of your own needed.
+# Signing is automatic using an App Store Connect API key.
+name: Homefolio iOS release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  ios:
+    runs-on: macos-15
+    environment: production
+    defaults:
+      run:
+        working-directory: homefolio
+    env:
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+      VITE_SITE_URL: ${{ vars.VITE_SITE_URL }}
+      VITE_WEBSITE_URL: ${{ vars.VITE_WEBSITE_URL }}
+      VITE_SUPPORT_EMAIL: ${{ vars.VITE_SUPPORT_EMAIL }}
+      VITE_REVENUECAT_IOS_KEY: ${{ vars.VITE_REVENUECAT_IOS_KEY }}
+      ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: homefolio/package-lock.json
+
+      - run: npm ci
+
+      - name: Version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then V="${GITHUB_REF_NAME#v}"; else V=$(node -p "require('./package.json').version"); fi
+          echo "name=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Build the app and copy it into the iOS project
+        run: |
+          npm run build:mobile
+          npx cap sync ios
+
+      - name: App Store Connect API key
+        run: |
+          mkdir -p "$RUNNER_TEMP/keys"
+          echo "${{ secrets.APP_STORE_CONNECT_KEY_P8 }}" > "$RUNNER_TEMP/keys/AuthKey.p8"
+
+      - name: Archive
+        run: |
+          xcodebuild archive \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Homefolio.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="${{ vars.APPLE_TEAM_ID }}" \
+            CODE_SIGN_STYLE=Automatic \
+            MARKETING_VERSION="${{ steps.version.outputs.name }}" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}"
+
+      - name: Upload to App Store Connect (TestFlight)
+        run: |
+          sed "s/TEAM_ID/${{ vars.APPLE_TEAM_ID }}/" ios/ExportOptions.plist > "$RUNNER_TEMP/ExportOptions.plist"
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Homefolio.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"

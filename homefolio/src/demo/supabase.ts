@@ -8,6 +8,7 @@ import { DEMO_USER, FK, createSeed, type Row, type Store } from './seed';
 
 export const isSupabaseConfigured = true;
 export const STORAGE_BUCKET = 'homefolio';
+export const SITE_URL = 'https://app.homefolio.co.uk';
 
 let store: Store = createSeed();
 const files = new Map<string, string>(); // storage path → blob URL
@@ -348,6 +349,15 @@ const DEFAULTS: Record<string, Row> = {
     caption: null,
   },
   custom_fields: { value: null, sort_order: 0 },
+  ad_campaigns: {
+    body: null,
+    cta_label: 'Learn more',
+    logo_url: null,
+    weight: 1,
+    active: true,
+    price_per_month: null,
+    notes: null,
+  },
 };
 
 /** Mirrors the database's ON DELETE CASCADE / SET NULL rules. */
@@ -554,6 +564,35 @@ const RPC: Record<string, (args: Row) => unknown> = {
     for (const [path, url] of extra.__files) files.set(path, url);
     return (extra.properties as Row[])[0].id;
   },
+  storage_status: () => {
+    const used = [...table('documents'), ...table('photos')].reduce((s, r) => s + Number(r.size_bytes ?? 0), 0);
+    const plus = table('profiles')[0]?.plan === 'plus';
+    return { used, limit: (plus ? 25 : 1) * 1024 ** 3, plus };
+  },
+  record_ad_event: ({ p_campaign, p_event }) => {
+    const day = todayStr();
+    let row = table('ad_stats').find((s) => s.campaign_id === p_campaign && s.day === day);
+    if (!row) {
+      row = { campaign_id: p_campaign, day, impressions: 0, clicks: 0 };
+      table('ad_stats').push(row);
+    }
+    if (p_event === 'impression') row.impressions = Number(row.impressions) + 1;
+    if (p_event === 'click') row.clicks = Number(row.clicks) + 1;
+    return null;
+  },
+  ad_report: ({ p_from, p_to }) =>
+    table('ad_campaigns').map((c) => {
+      const stats = table('ad_stats').filter(
+        (s) => s.campaign_id === c.id && (s.day as string) >= (p_from as string) && (s.day as string) <= (p_to as string),
+      );
+      return {
+        campaign_id: c.id,
+        advertiser: c.advertiser,
+        placement: c.placement,
+        views: stats.reduce((n, s) => n + Number(s.impressions), 0),
+        clicks: stats.reduce((n, s) => n + Number(s.clicks), 0),
+      };
+    }),
   delete_my_account: () => {
     store = { __files: [] } as unknown as Store;
     return null;
@@ -569,7 +608,14 @@ const listeners = new Set<AuthListener>();
 const makeSession = (email: string) => ({
   access_token: 'demo',
   token_type: 'bearer',
-  user: { id: DEMO_USER.id, email, user_metadata: { full_name: DEMO_USER.name }, app_metadata: {}, aud: 'authenticated' },
+  user: {
+    id: DEMO_USER.id,
+    email,
+    user_metadata: { full_name: DEMO_USER.name },
+    app_metadata: {},
+    aud: 'authenticated',
+    created_at: '2025-01-01T09:00:00Z',
+  },
 });
 let session: ReturnType<typeof makeSession> | null = makeSession(DEMO_USER.email);
 const emit = (event: string) => setTimeout(() => listeners.forEach((l) => l(event, session)), 0);
@@ -597,6 +643,10 @@ const auth = {
         {
           id: DEMO_USER.id,
           full_name: options?.data?.full_name || null,
+          plan: 'free',
+          plan_expires_at: null,
+          plan_source: null,
+          is_admin: false,
           theme: 'system',
           reminder_window_days: 120,
           remind_maintenance: true,
@@ -634,6 +684,9 @@ const storage = {
     },
     async createSignedUrls(paths: string[]) {
       return { data: paths.map((p) => ({ path: p, signedUrl: files.get(p) ?? null })), error: null };
+    },
+    getPublicUrl(path: string) {
+      return { data: { publicUrl: files.get(path) ?? '' } };
     },
     async createSignedUrl(path: string) {
       return { data: { signedUrl: files.get(path) ?? '' }, error: null };

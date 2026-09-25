@@ -1,4 +1,5 @@
 import { Phone, Plus, Zap } from 'lucide-react';
+import { SponsoredCard } from '@/components/SponsoredCard';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FormModal, toFormValues } from '@/components/forms/EntityForm';
@@ -173,6 +174,7 @@ export default function Utilities() {
           </ul>
         </>
       )}
+      <SponsoredCard placement="utilities" className="mt-6" />
       <UtilityFormModal
         open={editor.isOpen}
         onClose={editor.close}

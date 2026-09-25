@@ -1,0 +1,70 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Homefolio",
+  "version": "../package.json",
+  "identifier": "uk.co.homefolio.app",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run build:desktop",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Homefolio",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 380,
+        "minHeight": 600,
+        "center": true,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.supabase.co; connect-src 'self' ipc: http://ipc.localhost https://*.supabase.co wss://*.supabase.co https://github.com https://objects.githubusercontent.com; frame-src 'self' blob: https://*.supabase.co; object-src 'none'; base-uri 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "publisher": "Homefolio",
+    "copyright": "© Homefolio",
+    "category": "Productivity",
+    "shortDescription": "Everything about your home, in one place",
+    "longDescription": "Homefolio keeps everything about your home in one place: appliances, warranties, receipts, documents, maintenance reminders, utilities, insurance and emergency contacts.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "createUpdaterArtifacts": true,
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false,
+        "installerIcon": "icons/icon.ico",
+        "startMenuFolder": "Homefolio"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEE4OEI3QUY5RDg2MzJBN0IKUldSN0ttUFkrWHFMcUppUzZPVXpSRXlIdm85KytjeERCbXNFSFMwWlJscHZvVTVnSlMrSG8vVmwK",
+      "endpoints": [
+        "https://github.com/bkai7612-dot/homefolio-releases/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
+}

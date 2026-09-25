@@ -12,3 +12,10 @@ export const supabase = createClient(url ?? 'http://localhost:54321', anonKey ??
 });
 
 export const STORAGE_BUCKET = 'homefolio';
+
+/**
+ * Public address of the web app. Email links (confirm sign-up, reset password)
+ * always point here, because inside the phone and Windows apps the page's own
+ * origin is an internal address that can't be opened from an email.
+ */
+export const SITE_URL = (import.meta.env.VITE_SITE_URL as string | undefined)?.replace(/\/$/, '') ?? window.location.origin;

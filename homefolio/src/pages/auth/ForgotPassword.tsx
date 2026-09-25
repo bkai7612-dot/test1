@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Field, Input } from '@/components/ui/Field';
 import { FormError } from '@/components/ui/States';
 import { friendlyError } from '@/lib/errors';
-import { supabase } from '@/lib/supabase';
+import { SITE_URL, supabase } from '@/lib/supabase';
 import { AuthLayout } from './AuthLayout';
 
 export default function ForgotPassword() {
@@ -20,7 +20,7 @@ export default function ForgotPassword() {
     setBusy(true);
     setError(null);
     const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${SITE_URL}/reset-password`,
     });
     setBusy(false);
     if (err) return setError(friendlyError(err));

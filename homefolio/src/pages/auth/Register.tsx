@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Field, Input } from '@/components/ui/Field';
 import { FormError } from '@/components/ui/States';
 import { friendlyError } from '@/lib/errors';
-import { supabase } from '@/lib/supabase';
+import { SITE_URL, supabase } from '@/lib/supabase';
 import { AuthLayout, PasswordInput } from './AuthLayout';
 
 export default function Register() {
@@ -26,7 +26,7 @@ export default function Register() {
     const { data, error: err } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: { data: { full_name: name.trim() }, emailRedirectTo: window.location.origin },
+      options: { data: { full_name: name.trim() }, emailRedirectTo: SITE_URL },
     });
     setBusy(false);
     if (err) return setError(friendlyError(err));

@@ -32,6 +32,7 @@ import type { Status } from '@/lib/status';
 import { supabase } from '@/lib/supabase';
 import type { Property, PropertySummary, Reminder, ReminderKind } from '@/lib/types';
 import { PropertyFormModal } from './Properties';
+import { SponsoredCard } from '@/components/SponsoredCard';
 
 const REMINDER_ICONS: Record<ReminderKind, LucideIcon> = {
   maintenance: Wrench,
@@ -105,6 +106,7 @@ export default function Dashboard() {
           <Summary propertyId={active.id} />
         </div>
       </div>
+      <SponsoredCard placement="dashboard" />
     </div>
   );
 }

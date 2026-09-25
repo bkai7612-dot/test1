@@ -5,6 +5,15 @@ export type Store = Record<string, Row[]> & { __files: [string, string][] };
 
 export const DEMO_USER = { id: '11111111-1111-4111-8111-111111111111', email: 'kai@example.com', name: 'Kai' };
 
+/** Screenshots for the app stores add #plus to hide sponsored cards. */
+export function demoPlus(): boolean {
+  try {
+    return window.location.hash.includes('plus') || localStorage.getItem('homefolio-demo-plus') === '1';
+  } catch {
+    return false;
+  }
+}
+
 /** Foreign-key column that points at each table (used for embeds and cascades). */
 export const FK: Record<string, string> = {
   properties: 'property_id',
@@ -84,6 +93,44 @@ export function createSeed({ sample = false }: { sample?: boolean } = {}): Store
       remind_warranties: true,
       remind_insurance: true,
       remind_contracts: true,
+      // The prototype shows the free plan (with a sponsored card) unless
+      // screenshots ask for Plus; the admin page is open so it can be explored.
+      plan: demoPlus() ? 'plus' : 'free',
+      plan_expires_at: null,
+      plan_source: demoPlus() ? 'promo' : null,
+      is_admin: true,
+    });
+    const today = new Date();
+    const inDays = (n: number) => iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() + n));
+    add('ad_campaigns', {
+      advertiser: 'Example Heating Co.',
+      placement: 'dashboard',
+      headline: 'Boiler service from £69',
+      body: 'Gas Safe registered engineers across the county. Book online in two minutes.',
+      cta_label: 'Book a service',
+      url: 'https://example.com/boiler-service',
+      logo_url: null,
+      starts_on: inDays(-10),
+      ends_on: inDays(50),
+      weight: 1,
+      active: true,
+      price_per_month: 240,
+      notes: 'Sample campaign for the prototype.',
+    });
+    add('ad_campaigns', {
+      advertiser: 'Example Appliance Repairs',
+      placement: 'maintenance',
+      headline: 'Washing machine playing up?',
+      body: 'Same-week repairs for all major brands, with a 12-month guarantee.',
+      cta_label: 'Get a quote',
+      url: 'https://example.com/repairs',
+      logo_url: null,
+      starts_on: inDays(-3),
+      ends_on: inDays(27),
+      weight: 1,
+      active: true,
+      price_per_month: 100,
+      notes: null,
     });
     for (const [kind, name] of [
       ['appliance', 'Coffee machine'],

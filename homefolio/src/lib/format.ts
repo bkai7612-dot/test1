@@ -49,7 +49,9 @@ export function formatBytes(bytes: number | null | undefined): string {
   if (!bytes) return '';
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  const gb = bytes / (1024 * 1024 * 1024);
+  return `${Number.isInteger(gb) ? gb : gb.toFixed(1)} GB`;
 }
 
 /** "in 24 days", "tomorrow", "3 days ago", "in 4 months". */

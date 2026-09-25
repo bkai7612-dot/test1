@@ -1,4 +1,5 @@
 import { Plus } from 'lucide-react';
+import { SponsoredCard } from '@/components/SponsoredCard';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { StatusBadge, Tag } from '@/components/ui/Badges';
@@ -135,6 +136,7 @@ export default function ItemsList({ kind }: { kind: ItemKind }) {
           )}
         </>
       )}
+      {kind === 'appliance' && <SponsoredCard placement="appliances" className="mt-6" />}
       <ItemFormModal
         kind={kind}
         open={editor.isOpen}

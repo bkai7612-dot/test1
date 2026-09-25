@@ -1,6 +1,20 @@
-import { Bell, Download, Palette, KeyRound, LogOut, Sparkles, Tags, Trash2, UserRound, X, Database } from 'lucide-react';
+import {
+  Bell,
+  Crown,
+  Download,
+  Palette,
+  KeyRound,
+  LogOut,
+  Megaphone,
+  Sparkles,
+  Tags,
+  Trash2,
+  UserRound,
+  X,
+  Database,
+} from 'lucide-react';
 import { useState, type FormEvent } from 'react';
-import { Button, IconButton } from '@/components/ui/Button';
+import { Button, IconButton, LinkButton } from '@/components/ui/Button';
 import { Section } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Field, Input, Select, Toggle } from '@/components/ui/Field';
@@ -11,11 +25,70 @@ import { useAuth, useUser } from '@/context/AuthContext';
 import { useCategories } from '@/context/CategoriesContext';
 import { useProperties } from '@/context/PropertyContext';
 import { useToast } from '@/context/ToastContext';
+import { usePlan } from '@/hooks/usePlan';
+import { useQuery } from '@/hooks/useQuery';
 import { deleteAccount, deleteProperty, type Table } from '@/lib/api';
 import { friendlyError, unwrap } from '@/lib/errors';
-import { titleCase } from '@/lib/format';
+import { formatBytes, formatDate, titleCase } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
-import type { CategoryKind, Profile, ThemePreference } from '@/lib/types';
+import type { CategoryKind, Profile, StorageStatus, ThemePreference } from '@/lib/types';
+
+function PlanSection() {
+  const { isPlus, isLifetime, expiresAt, isAdmin } = usePlan();
+  const { data: storage } = useQuery(async () => unwrap(await supabase.rpc('storage_status')) as StorageStatus, [isPlus]);
+  const pct = storage ? Math.min(100, Math.round((100 * storage.used) / storage.limit)) : 0;
+  return (
+    <Section title="Your plan" icon={Crown}>
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-ink font-medium">{isPlus ? 'Homefolio Plus' : 'Free'}</p>
+            <p className="text-muted text-sm">
+              {isPlus
+                ? isLifetime
+                  ? 'Lifetime access'
+                  : expiresAt
+                    ? `Renews or ends on ${formatDate(expiresAt)}`
+                    : ''
+                : '1 property · 1 GB storage · sponsored cards'}
+            </p>
+          </div>
+          <LinkButton to="/upgrade" variant={isPlus ? 'secondary' : 'primary'} size="sm" icon={Sparkles}>
+            {isPlus ? 'Manage' : 'Upgrade'}
+          </LinkButton>
+        </div>
+        {storage && (
+          <div>
+            <div className="text-muted mb-1.5 flex justify-between text-sm">
+              <span>Storage</span>
+              <span>
+                {formatBytes(storage.used) || '0 MB'} of {formatBytes(storage.limit)}
+              </span>
+            </div>
+            <div
+              className="bg-surface-muted h-2 overflow-hidden rounded-full"
+              role="progressbar"
+              aria-valuenow={pct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Storage used"
+            >
+              <div
+                className={`h-full rounded-full ${pct >= 90 ? 'bg-amber-500' : 'bg-brand-500'}`}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+          </div>
+        )}
+        {isAdmin && (
+          <LinkButton to="/admin" variant="secondary" size="sm" icon={Megaphone}>
+            Manage advertising
+          </LinkButton>
+        )}
+      </div>
+    </Section>
+  );
+}
 
 function AccountSection() {
   const { profile, updateProfile } = useAuth();
@@ -286,7 +359,8 @@ function DataSection() {
         <div className="border-line border-t pt-5">
           <p className="text-ink text-sm font-medium">Sample home</p>
           <p className="text-muted mt-0.5 text-sm">
-            A separate, clearly-labelled property filled with example data to explore Homefolio. It never mixes with your own homes.
+            A separate, clearly-labelled property filled with example data to explore Homefolio. It never mixes with your own
+            homes.
           </p>
           {samples.length ? (
             <Button variant="secondary" size="sm" icon={Trash2} className="mt-2" onClick={() => setRemovingSample(true)}>
@@ -358,6 +432,7 @@ export default function Settings() {
       <PageHeader title="Settings" />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="space-y-4">
+          <PlanSection />
           <AccountSection />
           <PasswordSection />
           <CategoriesSection />

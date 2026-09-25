@@ -1,4 +1,5 @@
 import { CalendarCheck, Plus, Wrench } from 'lucide-react';
+import { SponsoredCard } from '@/components/SponsoredCard';
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { StatusBadge, Tag } from '@/components/ui/Badges';
@@ -227,6 +228,7 @@ export default function Maintenance() {
             ))}
         </>
       )}
+      <SponsoredCard placement="maintenance" className="mt-6" />
       <TaskFormModal
         open={editor.isOpen}
         onClose={editor.close}

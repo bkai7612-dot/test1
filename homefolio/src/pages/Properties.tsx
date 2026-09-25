@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/ui/Layout';
 import { useProperties } from '@/context/PropertyContext';
 import { useToast } from '@/context/ToastContext';
 import { useEditor } from '@/hooks/useEditor';
+import { usePlan } from '@/hooks/usePlan';
 import { insertRow, updateRow } from '@/lib/api';
 import { PROPERTY_TYPES } from '@/lib/constants';
 import { PROPERTY_FIELDS } from '@/lib/fields';
@@ -75,6 +76,12 @@ export default function Properties() {
   const { properties, active, setActive, loading, error, reload } = useProperties();
   const editor = useEditor<Property>();
   const navigate = useNavigate();
+  const { isPlus } = usePlan();
+  // The free plan includes one property (the sample home doesn't count).
+  const addProperty = () => {
+    if (!isPlus && properties.some((p) => !p.is_sample)) navigate('/upgrade?reason=properties');
+    else editor.openNew();
+  };
 
   return (
     <>
@@ -82,7 +89,7 @@ export default function Properties() {
         title="Properties"
         description="Each property keeps its own rooms, appliances, documents and reminders."
         actions={
-          <Button icon={Plus} onClick={editor.openNew}>
+          <Button icon={Plus} onClick={addProperty}>
             Add property
           </Button>
         }
@@ -97,7 +104,7 @@ export default function Properties() {
           title="No properties yet"
           description="Add your home to start keeping everything about it in one place."
           action={
-            <Button icon={Plus} onClick={editor.openNew}>
+            <Button icon={Plus} onClick={addProperty}>
               Add property
             </Button>
           }

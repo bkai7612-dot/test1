@@ -1,5 +1,7 @@
 # Homefolio
 
+> **Launching?** Start with [LAUNCH.md](./LAUNCH.md): every account, price, key and button, in order.
+
 **Everything about your home, in one place.**
 
 Homefolio is a free, responsive web app for homeowners and renters to keep track of their properties, rooms, appliances,
@@ -31,10 +33,14 @@ Storage).
 | Household | Members with contact details and an emergency-contact flag |
 | Emergency | Your important contacts, household emergency contacts, insurance claims lines, plus UK national numbers (tap to call — never automatic) |
 | Search | One search across appliances, inventory, documents, maintenance, warranties, rooms, utilities, insurance and contacts — in the current property or all properties |
-| Settings | Account, password, appearance (system / light / dark), reminder preferences, custom categories, data download (JSON), sample home, delete account |
+| Settings | Plan and storage, account, password, appearance (system / light / dark), reminder preferences, custom categories, data download (JSON), sample home, delete account |
+| Homefolio Plus | Free plan: 1 property, 1 GB, sponsored cards. Plus (monthly, yearly, lifetime) via App Store, Google Play or Stripe through RevenueCat; unlocks unlimited properties, 25 GB, no sponsored cards |
+| Sponsored cards | One small, clearly labelled card on some pages for free users; chosen by page, anonymous daily view/click totals; managed on the admin page |
+| Phone features | Reminder notifications, camera, share sheet, Android back button |
+| Windows app | Per-user installer that opens straight to sign-in, auto-updates, remembers window size |
 | Custom data | Add your own categories for rooms, appliances, inventory, documents, utilities, maintenance and contacts, and custom "label: value" fields on properties, rooms, appliances and inventory |
 
-Reminders are shown in the app (dashboard "Upcoming"). There are no push notifications in this MVP.
+Reminders are shown in the app (dashboard "Upcoming") and, on iPhone and Android, as local notifications.
 
 ---
 
@@ -86,6 +92,17 @@ http://127.0.0.1:54324.
 
 `npm run build:demo` builds the real app against an in-browser mock backend (`src/demo/`) seeded with an example home,
 bundled into a single file at `dist-demo/index.html`. Useful for sharing the design; changes reset on reload.
+
+### Desktop and phone apps
+
+| Command | What it does |
+| --- | --- |
+| `npm run tauri dev` | Run the Windows/desktop app locally (needs Rust) |
+| `npm run build:desktop` | Build the web part of the desktop app (`--mode desktop`, hash routes) |
+| `npm run build:mobile && npx cap sync` | Build and copy the app into the `ios/` and `android/` projects |
+| `npx cap open ios` / `npx cap open android` | Open the native project in Xcode / Android Studio |
+
+Release builds normally run on GitHub Actions (`.github/workflows/homefolio-release-*.yml`).
 
 ### Useful scripts
 

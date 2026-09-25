@@ -1,4 +1,4 @@
-import { Download, Pencil, Trash2 } from 'lucide-react';
+import { Download, Pencil, Share2, Trash2 } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
@@ -7,6 +7,8 @@ import { addDocument, removeDocument, updateRow, type Link } from '@/lib/api';
 import { DOCUMENT_ACCEPT } from '@/lib/constants';
 import { friendlyError } from '@/lib/errors';
 import { formatBytes, formatDate } from '@/lib/format';
+import { shareFile } from '@/lib/native';
+import { isNative } from '@/lib/platform';
 import { getDownloadUrl, isImage, isPdf, validateFile } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
 import type { HomeDocument, LinkKey } from '@/lib/types';
@@ -290,7 +292,18 @@ export function DocumentViewModal({ document, onClose, onEdit, onDeleted, attach
               <Button variant="secondary" icon={Pencil} onClick={() => onEdit(document)}>
                 Edit
               </Button>
-              {document.file_path && (
+              {isNative && document.file_path && url && (
+                <Button
+                  variant="secondary"
+                  icon={Share2}
+                  onClick={() =>
+                    shareFile(url, document.file_name ?? `${document.name}.pdf`, document.name).catch((err) => toast.error(err))
+                  }
+                >
+                  Share
+                </Button>
+              )}
+              {document.file_path && !isNative && (
                 <Button icon={Download} onClick={download} loading={downloading}>
                   Download
                 </Button>
