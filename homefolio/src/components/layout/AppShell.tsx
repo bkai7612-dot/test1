@@ -120,7 +120,7 @@ function BottomNav() {
 function TopBar() {
   const { active } = useProperties();
   return (
-    <header className="border-line bg-canvas/90 sticky top-0 z-20 border-b backdrop-blur">
+    <header data-tour-topbar className="border-line bg-canvas/90 sticky top-0 z-20 border-b backdrop-blur">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6 lg:h-16 lg:px-8">
         <div className="flex min-w-0 items-center gap-2 lg:hidden">
           <Logo iconOnly />

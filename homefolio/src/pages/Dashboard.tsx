@@ -105,7 +105,7 @@ export default function Dashboard() {
       <GettingStarted propertyId={active.id} />
       <QuickActions />
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        <div className="min-w-0 lg:col-span-3" data-tour="upcoming">
+        <div className="min-w-0 lg:col-span-3 lg:self-start" data-tour="upcoming">
           <Upcoming propertyId={active.id} />
         </div>
         <div className="min-w-0 lg:col-span-2">

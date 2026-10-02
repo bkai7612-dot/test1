@@ -14,6 +14,7 @@ import {
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import { cn } from '@/lib/cn';
 import { useProperties } from '@/context/PropertyContext';
 import { Button } from '../ui/Button';
 import { LogoMark } from '../layout/Logo';
@@ -133,10 +134,13 @@ export function TourProvider({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const [step, setStep] = useState<number | null>(null);
+  const [skipped, setSkipped] = useState<Set<number>>(new Set());
   const autoStarted = useRef(false);
+  const addSkipped = useCallback((indices: number[]) => setSkipped((s) => new Set([...s, ...indices])), []);
 
   const start = useCallback(() => {
     navigate('/');
+    setSkipped(new Set());
     setStep(0);
   }, [navigate]);
 
@@ -156,107 +160,198 @@ export function TourProvider({ children }: { children: ReactNode }) {
   return (
     <TourContext.Provider value={{ start }}>
       {children}
-      {step !== null && createPortal(<TourOverlay index={step} setIndex={setStep} onFinish={finish} />, document.body)}
+      {step !== null &&
+        createPortal(
+          <TourOverlay index={step} skipped={skipped} setIndex={setStep} onSkip={addSkipped} onFinish={finish} />,
+          document.body,
+        )}
     </TourContext.Provider>
   );
 }
 
-interface Placement {
-  hole: DOMRect | null;
-  card: CSSProperties;
+const GAP = 14;
+const MARGIN = 16;
+const CARD_W = 360;
+
+const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(n, Math.max(lo, hi)));
+
+/** Bottom edge of the sticky top bar, so scrolled targets never sit underneath it. */
+function topInset(): number {
+  const bar = document.querySelector<HTMLElement>('[data-tour-topbar]');
+  return bar ? Math.max(0, bar.getBoundingClientRect().bottom) : 0;
 }
 
-function place(rect: DOMRect | null): Placement {
+/** Fixed or sticky elements (menus, the top bar) move with the screen, so scrolling won't help. */
+function isPinned(el: HTMLElement): boolean {
+  for (let n: HTMLElement | null = el; n && n !== document.body; n = n.parentElement) {
+    const pos = getComputedStyle(n).position;
+    if (pos === 'fixed' || pos === 'sticky') return true;
+  }
+  return false;
+}
+
+/** Scrolls so the target and its card fit on screen together, or the target sits just under the top bar if not. */
+function bringIntoView(el: HTMLElement, cardH: number) {
+  if (isPinned(el)) return;
+  const r = el.getBoundingClientRect();
+  const top = topInset() + MARGIN;
+  const room = window.innerHeight - top - MARGIN;
+  const block = r.height + GAP + cardH;
+  const want = block <= room ? top + (room - block) / 2 : top;
+  if (Math.abs(r.top - want) > 1) window.scrollBy({ top: r.top - want, behavior: 'instant' as ScrollBehavior });
+}
+
+/** Where the card goes: beside the highlight, never on top of it unless the screen is simply too small. */
+function placeCard(rect: DOMRect | null, h: number): CSSProperties {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  const gap = 14;
-  if (!rect)
-    return {
-      hole: null,
-      card:
-        vw < 640
-          ? { left: 16, right: 16, top: '50%', transform: 'translateY(-50%)' }
-          : { left: '50%', top: '50%', transform: 'translate(-50%, -50%)', width: 360 },
-    };
-  // Phones: dock the card on the half of the screen away from the highlight.
-  if (vw < 640) {
-    const inTopHalf = rect.top + rect.height / 2 < vh / 2;
-    return { hole: rect, card: inTopHalf ? { left: 16, right: 16, bottom: 16 } : { left: 16, right: 16, top: 16 } };
+  const phone = vw < 640;
+  if (!rect) {
+    const top = Math.max(MARGIN, (vh - h) / 2);
+    return phone ? { left: MARGIN, right: MARGIN, top } : { left: (vw - CARD_W) / 2, top, width: CARD_W };
   }
-  const width = 360;
-  // Tall targets (the sidebar): sit beside them.
-  if (rect.height > vh * 0.5) {
-    const left = rect.right + gap + width < vw ? rect.right + gap : Math.max(16, rect.left - gap - width);
-    return { hole: rect, card: { left, top: Math.max(16, Math.min(rect.top + 40, vh - 300)), width } };
+  const below = vh - rect.bottom - GAP - MARGIN;
+  const above = rect.top - GAP - MARGIN;
+  if (phone) {
+    const x = { left: MARGIN, right: MARGIN };
+    if (below >= h) return { ...x, top: rect.bottom + GAP };
+    if (above >= h) return { ...x, top: rect.top - GAP - h };
+    return below >= above ? { ...x, top: vh - MARGIN - h } : { ...x, top: MARGIN };
   }
-  const left = Math.max(16, Math.min(rect.left + rect.width / 2 - width / 2, vw - width - 16));
-  const below = vh - rect.bottom > 240 || rect.top < 240;
-  return {
-    hole: rect,
-    card: below ? { left, top: rect.bottom + gap, width } : { left, bottom: vh - rect.top + gap, width },
-  };
+  const tall = rect.height > vh * 0.5;
+  const left = clamp(rect.left + rect.width / 2 - CARD_W / 2, MARGIN, vw - CARD_W - MARGIN);
+  if (!tall && below >= h) return { left, top: rect.bottom + GAP, width: CARD_W };
+  if (!tall && above >= h) return { left, top: rect.top - GAP - h, width: CARD_W };
+  const sideTop = clamp(rect.top, MARGIN, vh - h - MARGIN);
+  if (vw - rect.right - GAP - MARGIN >= CARD_W) return { left: rect.right + GAP, top: sideTop, width: CARD_W };
+  if (rect.left - GAP - MARGIN >= CARD_W) return { left: rect.left - GAP - CARD_W, top: sideTop, width: CARD_W };
+  return { left: vw - CARD_W - MARGIN, top: below >= above ? vh - MARGIN - h : MARGIN, width: CARD_W };
 }
 
-function TourOverlay({ index, setIndex, onFinish }: { index: number; setIndex: (i: number) => void; onFinish: () => void }) {
+const sameRect = (a: DOMRect | null, b: DOMRect | null) =>
+  a === b ||
+  (!!a &&
+    !!b &&
+    Math.abs(a.top - b.top) < 0.5 &&
+    Math.abs(a.left - b.left) < 0.5 &&
+    Math.abs(a.width - b.width) < 0.5 &&
+    Math.abs(a.height - b.height) < 0.5);
+
+function TourOverlay({
+  index,
+  skipped,
+  setIndex,
+  onSkip,
+  onFinish,
+}: {
+  index: number;
+  skipped: Set<number>;
+  setIndex: (i: number) => void;
+  onSkip: (indices: number[]) => void;
+  onFinish: () => void;
+}) {
   const step = STEPS[index];
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const [placement, setPlacement] = useState<Placement | null>(null);
-  const [direction, setDirection] = useState<1 | -1>(1);
+  const [rect, setRect] = useState<DOMRect | null>(null);
+  const [shown, setShown] = useState(false);
+  const [cardH, setCardH] = useState(0);
+  const direction = useRef<1 | -1>(1);
   const cardRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
-  const last = index === STEPS.length - 1;
 
   const go = useCallback(
-    (delta: 1 | -1) => {
-      setDirection(delta);
-      const nextIndex = index + delta;
-      if (nextIndex >= STEPS.length) onFinish();
-      else if (nextIndex >= 0) setIndex(nextIndex);
+    (delta: 1 | -1, alsoSkip: number[] = []) => {
+      direction.current = delta;
+      let next = index + delta;
+      // Leaving the welcome card: drop optional Home-screen steps whose target isn't there (e.g. a finished checklist).
+      const extra =
+        index === 0 && delta === 1
+          ? STEPS.flatMap((s, i) => (s.optional && s.route === '/' && !findTarget(s.targets) ? [i] : []))
+          : [];
+      const skip = new Set([...skipped, ...alsoSkip, ...extra]);
+      if (extra.length || alsoSkip.length) onSkip([...extra, ...alsoSkip]);
+      while (skip.has(next)) next += delta;
+      if (next >= STEPS.length) onFinish();
+      else if (next >= 0) setIndex(next);
     },
-    [index, onFinish, setIndex],
+    [index, skipped, onSkip, onFinish, setIndex],
   );
 
   useEffect(() => {
     if (step.route && pathname !== step.route) navigate(step.route);
   }, [step.route, pathname, navigate]);
 
-  // Wait for the page (and its target) to render, then measure. Re-measure on scroll/resize.
+  // Follows the target every frame: waits for the page to settle, scrolls it into view, then
+  // tracks it through late-loading content, scrolling and resizing so the highlight never drifts.
   useLayoutEffect(() => {
-    setPlacement(null);
+    setShown(false);
+    setRect(null);
     if (step.route && pathname !== step.route) return;
-    let target: HTMLElement | null = null;
     let raf = 0;
-    let cancelled = false;
+    let phase: 'finding' | 'settling' | 'shown' = 'finding';
+    let last: DOMRect | null = null;
+    let stableFrames = 0;
+    let shownAt = 0;
+    let heightAtShow = 0;
     const began = performance.now();
-    const measure = () => setPlacement(place(target ? target.getBoundingClientRect() : null));
-    const look = () => {
-      if (cancelled) return;
-      target = findTarget(step.targets);
-      if (!step.targets || target) {
-        target?.scrollIntoView({ block: 'center', inline: 'nearest' });
-        measure();
+    let foundAt = 0;
+
+    const tick = () => {
+      const now = performance.now();
+      const h = cardRef.current?.offsetHeight ?? 0;
+      setCardH((prev) => (prev === h ? prev : h));
+      if (!step.targets) {
+        if (phase !== 'shown') {
+          phase = 'shown';
+          setShown(true);
+        }
+        raf = requestAnimationFrame(tick);
         return;
       }
-      if (performance.now() - began < 2500) raf = requestAnimationFrame(look);
-      else if (step.optional) go(direction);
-      else measure();
+      const target = findTarget(step.targets);
+      if (!target) {
+        if (phase === 'finding' && now - began > 2500) {
+          if (step.optional) return go(direction.current, [index]);
+          phase = 'shown';
+          setShown(true); // Fall back to a centred card.
+        }
+        raf = requestAnimationFrame(tick);
+        return;
+      }
+      if (phase === 'finding') {
+        phase = 'settling';
+        foundAt = now;
+      }
+      let r = target.getBoundingClientRect();
+      if (phase === 'settling') {
+        stableFrames = sameRect(r, last) ? stableFrames + 1 : 0;
+        last = r;
+        if ((stableFrames >= 8 && h > 0) || now - foundAt > 1200) {
+          bringIntoView(target, h);
+          r = target.getBoundingClientRect();
+          phase = 'shown';
+          shownAt = now;
+          heightAtShow = r.height;
+          setShown(true);
+        }
+      } else if (now - shownAt < 1500 && Math.abs(r.height - heightAtShow) > 24) {
+        // Content finished loading and the section grew: re-frame it once.
+        bringIntoView(target, h);
+        r = target.getBoundingClientRect();
+        heightAtShow = r.height;
+      }
+      setRect((prev) => (sameRect(prev, r) ? prev : r));
+      raf = requestAnimationFrame(tick);
     };
-    look();
-    window.addEventListener('resize', measure);
-    window.addEventListener('scroll', measure, true);
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(raf);
-      window.removeEventListener('resize', measure);
-      window.removeEventListener('scroll', measure, true);
-    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index, pathname]);
 
   useEffect(() => {
-    if (placement) cardRef.current?.focus();
-  }, [placement, index]);
+    if (shown) cardRef.current?.focus({ preventScroll: true });
+  }, [shown, index]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -268,7 +363,10 @@ function TourOverlay({ index, setIndex, onFinish }: { index: number; setIndex: (
     return () => window.removeEventListener('keydown', onKey);
   }, [go, index, onFinish]);
 
-  const hole = placement?.hole;
+  const visible = STEPS.map((_, i) => i).filter((i) => i > 0 && !skipped.has(i));
+  const number = visible.indexOf(index) + 1;
+  const last = index === STEPS.length - 1;
+  const hole = shown && step.targets ? rect : null;
   const pad = 6;
   return (
     <div className="fixed inset-0 z-[100]">
@@ -277,7 +375,8 @@ function TourOverlay({ index, setIndex, onFinish }: { index: number; setIndex: (
       {hole ? (
         <div
           aria-hidden
-          className="pointer-events-none absolute rounded-2xl ring-2 ring-white/80 motion-safe:transition-all motion-safe:duration-200"
+          data-tour-hole
+          className="pointer-events-none absolute rounded-2xl ring-2 ring-white/80"
           style={{
             left: hole.left - pad,
             top: hole.top - pad,
@@ -289,53 +388,54 @@ function TourOverlay({ index, setIndex, onFinish }: { index: number; setIndex: (
       ) : (
         <div aria-hidden className="absolute inset-0 bg-slate-900/60" />
       )}
-      {placement && (
-        <div
-          ref={cardRef}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={titleId}
-          tabIndex={-1}
-          className="border-line bg-surface text-ink absolute w-auto max-w-[calc(100vw-32px)] rounded-2xl border p-5 shadow-2xl outline-none sm:w-[360px]"
-          style={placement.card}
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              {index === 0 && <LogoMark className="mb-3 size-10" />}
-              <p className="text-brand-fg text-xs font-semibold tracking-wide uppercase">
-                {index === 0 ? 'Quick tour' : `Step ${index} of ${STEPS.length - 1}`}
-              </p>
-              <h2 id={titleId} className="mt-1 text-lg font-semibold">
-                {step.title}
-              </h2>
-            </div>
-            <button
-              type="button"
-              onClick={onFinish}
-              aria-label="Close the tour"
-              className="text-muted hover:bg-surface-muted hover:text-ink -mt-1 -mr-2 inline-flex size-10 shrink-0 items-center justify-center rounded-xl"
-            >
-              <X className="size-5" aria-hidden />
-            </button>
+      <div
+        ref={cardRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className={cn(
+          'border-line bg-surface text-ink absolute rounded-2xl border p-5 shadow-2xl outline-none',
+          !shown && 'invisible',
+        )}
+        style={shown ? placeCard(hole, cardH) : { left: MARGIN, top: 0, width: Math.min(CARD_W, window.innerWidth - 32) }}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            {index === 0 && <LogoMark className="mb-3 size-10" />}
+            <p className="text-brand-fg text-xs font-semibold tracking-wide uppercase">
+              {index === 0 ? 'Quick tour' : `Step ${number} of ${visible.length}`}
+            </p>
+            <h2 id={titleId} className="mt-1 text-lg font-semibold">
+              {step.title}
+            </h2>
           </div>
-          <p className="text-muted mt-2 text-sm leading-relaxed">{step.body}</p>
-          <div className="mt-5 flex items-center justify-between gap-2">
-            {index === 0 ? (
-              <Button variant="ghost" size="sm" onClick={onFinish}>
-                Skip tour
-              </Button>
-            ) : (
-              <Button variant="ghost" size="sm" icon={ArrowLeft} onClick={() => go(-1)}>
-                Back
-              </Button>
-            )}
-            <Button size="sm" onClick={() => go(1)}>
-              {index === 0 ? 'Start the tour' : last ? 'Finish' : 'Next'}
-              {!last && <ArrowRight className="size-4" aria-hidden />}
-            </Button>
-          </div>
+          <button
+            type="button"
+            onClick={onFinish}
+            aria-label="Close the tour"
+            className="text-muted hover:bg-surface-muted hover:text-ink -mt-1 -mr-2 inline-flex size-10 shrink-0 items-center justify-center rounded-xl"
+          >
+            <X className="size-5" aria-hidden />
+          </button>
         </div>
-      )}
+        <p className="text-muted mt-2 text-sm leading-relaxed">{step.body}</p>
+        <div className="mt-5 flex items-center justify-between gap-2">
+          {index === 0 ? (
+            <Button variant="ghost" size="sm" onClick={onFinish}>
+              Skip tour
+            </Button>
+          ) : (
+            <Button variant="ghost" size="sm" icon={ArrowLeft} onClick={() => go(-1)}>
+              Back
+            </Button>
+          )}
+          <Button size="sm" onClick={() => go(1)}>
+            {index === 0 ? 'Start the tour' : last ? 'Finish' : 'Next'}
+            {!last && <ArrowRight className="size-4" aria-hidden />}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
