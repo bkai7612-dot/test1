@@ -18,8 +18,12 @@ export type RoundState =
 	| "RESET"
 
 export type Faction = "Crew" | "Infiltrator"
+export type Winner = "Crew" | "Infiltrator" | "None"
 
 export type PlayerStatus = "Connecting" | "Lobby" | "InRound" | "Spectating"
+
+export type LifeState = "Alive" | "Downed" | "Lost" | "Confined" | "Escaped" | "Disconnected"
+export type PublicLifeState = "Active" | "Lost" | "Confined" | "Escaped" | "Disconnected"
 
 -- Server-only record describing a connected player. Never sent to clients as-is.
 export type PlayerSession = {
@@ -30,7 +34,7 @@ export type PlayerSession = {
 	IsLoaded: boolean,
 }
 
-export type NotificationKind = "Info" | "Warning" | "Alert"
+export type NotificationKind = "Info" | "Warning" | "Alert" | "Success"
 
 export type Notification = {
 	Text: string,
@@ -55,6 +59,45 @@ export type Lifecycle = {
 	Init: (() -> ())?,
 	Start: (() -> ())?,
 	Shutdown: (() -> ())?,
+}
+
+-- Per-round stats tracked for rewards and analytics.
+export type RoundStats = {
+	TaskSteps: number,
+	TasksCompleted: number,
+	Revives: number,
+	Scans: number,
+	EvidenceRevealed: number,
+	CorrectVotes: number,
+	Siphons: number,
+	Sabotages: number,
+	MeetingsSurvived: number,
+	HazardsFixed: number,
+}
+
+-- Minimal random interface so pure logic works with Roblox Random or a test shim.
+export type Rng = {
+	NextInteger: (self: any, min: number, max: number) -> number,
+	NextNumber: (self: any, min: number?, max: number?) -> number,
+}
+
+-- One entry of the private "Interactions" list sent to a client.
+export type InteractionEntry = {
+	Anchor: string,
+	Action: string,
+	Object: string,
+	Hold: number,
+	Key: number,
+	Range: number,
+}
+
+export type EvidenceEntry = {
+	Id: string,
+	Time: number, -- seconds since round start
+	Kind: string,
+	Room: string?,
+	Text: string,
+	SharedBy: string?,
 }
 
 return {}

@@ -114,6 +114,40 @@ function Validate.player(): Check
 	end
 end
 
+-- A table with at most `maxEntries` entries (contents are validated by the consumer).
+function Validate.table(maxEntries: number): Check
+	return function(value)
+		if type(value) ~= "table" then
+			return false, "expected table"
+		end
+		local count = 0
+		for _ in value do
+			count += 1
+			if count > maxEntries then
+				return false, "table too large"
+			end
+		end
+		return true
+	end
+end
+
+-- Any primitive value commonly used as a loosely-typed argument.
+function Validate.primitive(maxStringLength: number?): Check
+	local stringCheck = Validate.string(maxStringLength or 200)
+	local numberCheck = Validate.number()
+	return function(value)
+		local kind = type(value)
+		if kind == "string" then
+			return stringCheck(value)
+		elseif kind == "number" then
+			return numberCheck(value)
+		elseif kind == "boolean" then
+			return true
+		end
+		return false, "expected primitive"
+	end
+end
+
 function Validate.optional(check: Check): Check
 	return function(value)
 		if value == nil then
