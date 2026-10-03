@@ -25,7 +25,7 @@ ObjectiveAssigner.shuffled = shuffled
 
 -- For every objective, picks one station alternative per step.
 -- Returns { [objectiveId] = { altIndexForStep1, altIndexForStep2, ... } }.
-function ObjectiveAssigner.pickStations(objectives: { ObjectiveLike }, rng: Types.Rng): { [string]: { number } }
+function ObjectiveAssigner.pickStations(objectives: { any }, rng: Types.Rng): { [string]: { number } }
 	local result: { [string]: { number } } = {}
 	for _, objective in objectives do
 		local picks = {}
@@ -38,8 +38,8 @@ function ObjectiveAssigner.pickStations(objectives: { ObjectiveLike }, rng: Type
 end
 
 -- Chooses `rules.Count` objective ids with a healthy mix of lengths and categories.
-function ObjectiveAssigner.assign(objectives: { ObjectiveLike }, rules: Rules, rng: Types.Rng): { string }
-	local pool = shuffled(objectives, rng)
+function ObjectiveAssigner.assign(objectives: { any }, rules: Rules, rng: Types.Rng): { string }
+	local pool: { ObjectiveLike } = shuffled(objectives, rng)
 	local chosen: { string } = {}
 	local usedCategories: { [string]: number } = {}
 	local longCount, carryCount = 0, 0

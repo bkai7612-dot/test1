@@ -75,11 +75,10 @@ export type RoundStats = {
 	HazardsFixed: number,
 }
 
--- Minimal random interface so pure logic works with Roblox Random or a test shim.
-export type Rng = {
-	NextInteger: (self: any, min: number, max: number) -> number,
-	NextNumber: (self: any, min: number?, max: number?) -> number,
-}
+-- Random source for pure logic: a Roblox Random, or the test shim (which
+-- provides NextInteger/NextNumber). Typed loosely because Roblox's Random is a
+-- class type that table types can't describe structurally.
+export type Rng = any
 
 -- One entry of the private "Interactions" list sent to a client.
 export type InteractionEntry = {

@@ -28,11 +28,38 @@ local log = Logger.new("GameServer")
 
 -- Explicit order keeps boot deterministic. Add new services here as phases land.
 local SERVICE_ORDER = {
+	-- Foundation
 	"RemoteService",
 	"ReplicationService",
 	"PlayerManager",
+	"DataService",
+	"AnalyticsService",
+	"NotifyService",
+	-- World and round core
+	"MapService",
+	"MatchService",
+	"CharacterService",
+	"LobbyService",
+	"RoleService",
+	-- Gameplay systems
+	"InteractionService",
+	"EvidenceService",
+	"HazardService",
+	"ObjectiveService",
+	"SabotageService",
+	"EliminationService",
+	"MeetingService",
+	"EscapeService",
+	"EventService",
+	"ChatService",
+	-- Meta
+	"CosmeticService",
+	"ShopService",
+	"RewardService",
+	"AntiCheatService",
+	-- Orchestration and tools (last: they depend on everything above)
+	"RoundService",
 	"AdminService",
-	-- Phase 2+: "LobbyManager", "RoundManager", "RoleManager", ...
 }
 
 type LoadedService = { Name: string, Module: Types.Lifecycle }
@@ -81,13 +108,12 @@ game:BindToClose(function()
 	end
 end)
 
--- Initial public state. RoundManager (Phase 3) takes ownership of RoundState.
+-- Initial public state. RoundState is owned by MatchService.
 local ReplicationService = require(Services.ReplicationService)
 local RemoteService = require(Services.RemoteService)
 local PlayerManager = require(Services.PlayerManager)
 
 ReplicationService.SetPublic(Constants.PublicKey.ServerVersion, Config.Game.Version)
-ReplicationService.SetPublic(Constants.PublicKey.RoundState, Constants.RoundState.Lobby)
 
 PlayerManager.PlayerLoaded:Connect(function(session: Types.PlayerSession)
 	local notification: Types.Notification = {
