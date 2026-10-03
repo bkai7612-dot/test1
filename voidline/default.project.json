@@ -1,0 +1,59 @@
+{
+  "name": "Voidline",
+  "tree": {
+    "$className": "DataModel",
+
+    "ReplicatedStorage": {
+      "Shared": {
+        "$path": "src/shared"
+      },
+      "Assets": {
+        "$className": "Folder"
+      }
+    },
+
+    "ServerScriptService": {
+      "Server": {
+        "$path": "src/server"
+      }
+    },
+
+    "ServerStorage": {
+      "Maps": {
+        "$className": "Folder"
+      },
+      "Objectives": {
+        "$className": "Folder"
+      },
+      "ServerAssets": {
+        "$className": "Folder"
+      }
+    },
+
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "Client": {
+          "$path": "src/client"
+        }
+      }
+    },
+
+    "Workspace": {
+      "$properties": {
+        "StreamingEnabled": true
+      },
+      "Lobby": {
+        "$className": "Folder"
+      },
+      "ActiveMap": {
+        "$className": "Folder"
+      },
+      "SpawnPoints": {
+        "$className": "Folder"
+      },
+      "InteractiveObjects": {
+        "$className": "Folder"
+      }
+    }
+  }
+}
