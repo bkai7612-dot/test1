@@ -294,6 +294,26 @@ do
 	check(lastEvent(player, "MinigameStart", before) == nil, "out-of-range station request rejected")
 end
 
+-- Gallery lift: one press up, one press down.
+do
+	local root = player.Character.HumanoidRootPart
+	for _, spec in { { "Lift:Lift.Bottom", "Fixture:Lift.Bottom", 1 }, { "Lift:Lift.Top", "Fixture:Lift.Top", -1 } } do
+		standAt(player, spec[2])
+		local startY = root.Position.Y
+		local lift = waitFor("prompt " .. spec[1], function()
+			return promptFor(spec[1])
+		end, 3)
+		if check(lift ~= nil and lift.Enabled, "lift prompt shown: " .. spec[1]) then
+			check(lift.HoldDuration == 0, "lift rides with a single press")
+			task.wait(1.6) -- past the ride cooldown
+			Fake.signalFor(lift, "Triggered"):Fire(player)
+			check(waitFor("lift moved " .. spec[1], function()
+				return (root.Position.Y - startY) * spec[3] > 8
+			end, 3) ~= nil, "lift moved the player " .. (if spec[3] > 0 then "up to the gallery" else "down to the deck"))
+		end
+	end
+end
+
 local minigameGui = playerGui:FindFirstChild("VoidlineMinigame")
 
 print("Completing every objective step through the client...")
