@@ -80,7 +80,46 @@ function Components.panel(props: { [string]: any }?, children: { Instance }?): F
 	local frame = Create("Frame", merged, children)
 	Components.corner().Parent = frame
 	Components.stroke().Parent = frame
+	-- Subtle top-lit gradient for depth.
+	Create("UIGradient", {
+		Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(170, 180, 200)),
+		Rotation = 90,
+		Parent = frame,
+	})
 	return frame
+end
+
+-- Accent corner brackets (top-left and bottom-right), a HUD-style frame.
+function Components.brackets(frame: GuiObject, color: Color3?)
+	local tint = color or Theme.Color.Accent
+	local specs: { { Anchor: Vector2, Position: UDim2 } } = {
+		{ Anchor = Vector2.new(0, 0), Position = UDim2.fromOffset(-2, -2) },
+		{ Anchor = Vector2.new(1, 1), Position = UDim2.new(1, 2, 1, 2) },
+	}
+	for _, spec in specs do
+		local anchor = spec.Anchor
+		local position = spec.Position
+		Create("Frame", {
+			Name = "BracketH",
+			AnchorPoint = anchor,
+			Position = position,
+			Size = UDim2.fromOffset(22, 3),
+			BackgroundColor3 = tint,
+			BorderSizePixel = 0,
+			ZIndex = 5,
+			Parent = frame,
+		})
+		Create("Frame", {
+			Name = "BracketV",
+			AnchorPoint = anchor,
+			Position = position,
+			Size = UDim2.fromOffset(3, 22),
+			BackgroundColor3 = tint,
+			BorderSizePixel = 0,
+			ZIndex = 5,
+			Parent = frame,
+		})
+	end
 end
 
 function Components.label(text: string, props: { [string]: any }?): TextLabel
@@ -132,6 +171,22 @@ function Components.button(text: string, onClick: () -> (), style: ButtonStyle?,
 	end
 	local button = Create("TextButton", merged)
 	Components.corner().Parent = button
+	Create("UIGradient", {
+		Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(190, 198, 215)),
+		Rotation = 90,
+		Parent = button,
+	})
+	if style == "Primary" or style == "Danger" or style == "Success" then
+		Create("Frame", {
+			Name = "AccentBar",
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, -10, 0.5, 0),
+			Size = UDim2.new(0, 3, 0.6, 0),
+			BackgroundColor3 = colors.Stroke,
+			BorderSizePixel = 0,
+			Parent = button,
+		})
+	end
 	local stroke = Components.stroke(colors.Stroke, 0.45)
 	stroke.Parent = button
 	Components.padding(4, 10).Parent = button
@@ -185,6 +240,11 @@ function Components.progress(height: number?, color: Color3?): Progress
 		Parent = frame,
 	})
 	Components.corner(4).Parent = fill
+	Create("UIGradient", {
+		Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(150, 160, 180)),
+		Rotation = 90,
+		Parent = fill,
+	})
 	local label = Create("TextLabel", {
 		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(1, 1),
@@ -236,8 +296,8 @@ function Components.header(title: string, subtitle: string?): Frame
 	})
 	Components.list(2).Parent = frame
 	Components.label(string.upper(title), {
-		Font = Theme.Font.Bold,
-		TextSize = Theme.TextSize.Title,
+		Font = Theme.Font.Display,
+		TextSize = Theme.TextSize.Title - 2,
 		TextColor3 = Theme.Color.Accent,
 		LayoutOrder = 1,
 		Parent = frame,
@@ -422,6 +482,7 @@ function Components.modal(title: string, subtitle: string?, onClose: () -> (), s
 		Parent = backdrop,
 	})
 	Components.padding(16).Parent = panel
+	Components.brackets(panel)
 	local header = Components.header(title, subtitle)
 	header.Size = UDim2.new(1, -60, 0, 0)
 	header.Parent = panel

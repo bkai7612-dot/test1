@@ -151,6 +151,9 @@ return function(ctx: any)
 		end
 	end)
 	ctx.Audio.Captioned:Connect(caption)
+	ctx.Interaction.HoldReleasedEarly:Connect(function(action: string, duration: number)
+		toast(string.format("Keep holding to %s (%.1fs).", string.lower(action), duration), "Info", 2)
+	end)
 	ctx.Minigame.Finished:Connect(function(success: boolean, reason: string?)
 		if success then
 			toast("Step complete.", "Success", 2)

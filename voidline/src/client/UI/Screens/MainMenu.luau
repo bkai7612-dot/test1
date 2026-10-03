@@ -29,6 +29,49 @@ return function(ctx: any)
 		Parent = root,
 	})
 
+	-- Backdrop: drifting starfield and a glowing planet limb.
+	local stars = Create("Frame", { Name = "Stars", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = root })
+	local starList = {}
+	for i = 1, 90 do
+		local size = if i % 9 == 0 then 3 else (if i % 3 == 0 then 2 else 1)
+		local star = Create("Frame", {
+			BackgroundColor3 = if i % 7 == 0 then Color3.fromRGB(170, 210, 255) else Color3.new(1, 1, 1),
+			BackgroundTransparency = math.random() * 0.6,
+			BorderSizePixel = 0,
+			Size = UDim2.fromOffset(size, size),
+			Position = UDim2.fromScale(math.random(), math.random()),
+			Parent = stars,
+		})
+		table.insert(starList, { Frame = star, Speed = 0.004 + size * 0.004 })
+	end
+	local planet = Create("Frame", {
+		Name = "Planet",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.86, 1.02),
+		Size = UDim2.fromScale(0.75, 0.75),
+		SizeConstraint = Enum.SizeConstraint.RelativeYY,
+		BackgroundColor3 = Color3.fromRGB(40, 110, 200),
+		BorderSizePixel = 0,
+		Parent = root,
+	})
+	Create("UICorner", { CornerRadius = UDim.new(0.5, 0), Parent = planet })
+	Create("UIGradient", {
+		Color = ColorSequence.new(Color3.fromRGB(120, 200, 255), Color3.fromRGB(8, 20, 40)),
+		Rotation = 120,
+		Parent = planet,
+	})
+	Create("UIStroke", { Color = Color3.fromRGB(120, 200, 255), Thickness = 3, Transparency = 0.4, Parent = planet })
+	game:GetService("RunService").RenderStepped:Connect(function(dt)
+		if not root.Visible then
+			return
+		end
+		for _, star in starList do
+			local position = star.Frame.Position
+			local x = position.X.Scale - star.Speed * dt
+			star.Frame.Position = UDim2.fromScale(if x < 0 then 1 else x, position.Y.Scale)
+		end
+	end)
+
 	local column = Create("Frame", {
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0, 0.5),
@@ -39,13 +82,14 @@ return function(ctx: any)
 	})
 	Components.list(10).Parent = column
 
-	Components.label(Config.Game.Title, {
-		Font = Theme.Font.Bold,
+	local title = Components.label(Config.Game.Title, {
+		Font = Theme.Font.Display,
 		TextSize = Theme.TextSize.Hero,
 		TextColor3 = Theme.Color.Accent,
 		LayoutOrder = 1,
 		Parent = column,
 	})
+	Create("UIStroke", { Color = Color3.fromRGB(40, 140, 200), Thickness = 2, Transparency = 0.35, Parent = title })
 	Components.label("Restore the " .. Config.Game.ShipName .. ". Trust carefully.", {
 		TextColor3 = Theme.Color.Muted,
 		LayoutOrder = 2,

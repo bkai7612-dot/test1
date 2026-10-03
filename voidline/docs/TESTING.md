@@ -5,6 +5,7 @@ This plan covers every item in the spec's testing section.
 There are two kinds of tests:
 
 - **Static tests** run anywhere. They are the type check (`scripts/analyze.sh`) and the headless Luau tests (`tests/run.py`). The headless tests cover the state machine, role allocation, objective assignment, mini-game verification, vote tallying, win conditions, progression, rewards, and catalog and map integrity: anchor collisions, doorway clearance, hazard fixtures and area lookup.
+- **Runtime harness** (`lune run tests/runtime/run.luau .`, run from the `voidline` folder) boots the real server services and client controllers against fake Roblox services in `tests/runtime/FakeRoblox.luau`. It then plays a solo round through the UI: Play, ready, every task prompt and its mini-game window, a sabotage fix, a meeting, extraction, results and the menus. It finishes by checking that the profile saved and the session lock was released.
 - **Studio tests** run in Roblox Studio, using **Test → Clients and Servers** for multiplayer.
 
 Admin tools are on **F2**. Everyone is an admin inside Studio.

@@ -41,7 +41,7 @@ return function(ctx: any)
 		return Components.label(text, merged)
 	end
 	local kicker = centered("YOUR ASSIGNMENT", 1, { TextColor3 = Theme.Color.Muted, Font = Theme.Font.Medium })
-	local title = centered("", 2, { Font = Theme.Font.Bold, TextSize = Theme.TextSize.Hero })
+	local title = centered("", 2, { Font = Theme.Font.Display, TextSize = Theme.TextSize.Hero })
 	local description = centered("", 3, { TextSize = Theme.TextSize.Large })
 	local allies = centered("", 4, { TextColor3 = Theme.Color.Muted })
 	local accent = centered("", 5, { Font = Theme.Font.Bold })

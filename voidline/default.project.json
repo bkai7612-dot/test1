@@ -56,6 +56,16 @@
       "InteractiveObjects": {
         "$className": "Folder"
       }
+    },
+    "Lighting": {
+      "$properties": {
+        "Technology": {
+          "Enum": 4
+        },
+        "GlobalShadows": true,
+        "ClockTime": 0,
+        "Brightness": 2
+      }
     }
   }
 }

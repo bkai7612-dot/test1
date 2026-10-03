@@ -20,9 +20,14 @@ local Constants = require(Shared.Constants)
 local Net = require(Shared.Net)
 local Types = require(Shared.Types)
 
+local Signal = require(Shared.Utility.Signal)
+
 local ClientController = require(script.Parent.ClientController)
 
 local InteractionController = {}
+
+-- (actionText: string) a hold prompt was released before it finished
+InteractionController.HoldReleasedEarly = Signal.new()
 
 local KEYBOARD = { Enum.KeyCode.E, Enum.KeyCode.F, Enum.KeyCode.R }
 local GAMEPAD = { Enum.KeyCode.ButtonX, Enum.KeyCode.ButtonY, Enum.KeyCode.ButtonR1 }
@@ -58,13 +63,18 @@ local function createPrompt(id: string, entry: Types.InteractionEntry)
 		prompt.Exclusivity = Enum.ProximityPromptExclusivity.OnePerButton
 		prompt.ClickablePrompt = true
 		local triggered = false
+		local heldSince = 0
 		prompt.PromptButtonHoldBegan:Connect(function()
 			triggered = false
+			heldSince = os.clock()
 			beginRemote:FireServer(id)
 		end)
 		prompt.PromptButtonHoldEnded:Connect(function()
 			if not triggered then
 				cancelRemote:FireServer(id)
+				if os.clock() - heldSince < prompt.HoldDuration then
+					InteractionController.HoldReleasedEarly:Fire(prompt.ActionText, prompt.HoldDuration)
+				end
 			end
 		end)
 		prompt.Triggered:Connect(function()

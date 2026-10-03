@@ -23,6 +23,7 @@ local CONTROLLER_ORDER = {
 	"AudioController",
 	"CameraController",
 	"EffectsController",
+	"AmbientController",
 	"InputController",
 	"ChatController",
 	"VoiceController",

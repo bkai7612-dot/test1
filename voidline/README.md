@@ -29,6 +29,7 @@ Without Studio, you can still run the static checks:
 ```bash
 ./scripts/analyze.sh                       # type-check + lint every file against the Roblox API
 LUAU=/path/to/luau python3 tests/run.py    # headless logic and catalog-integrity tests
+lune run tests/runtime/run.luau .          # full round: real server + client code on fake Roblox services (~3 min)
 ```
 
 ---
@@ -115,7 +116,15 @@ src/client  → StarterPlayer.StarterPlayerScripts.Client
   Controllers/ (13)         Client (state mirror), Settings, Audio, Camera, Effects, Input,
                             Chat, Voice, Interaction, Minigame, Nameplate, UI, Tutorial
   UI/                       Theme, Create, Components, Minigames, Screens/ (15 screens)
+
+src/server/Art               the visual pass, called by MapService
+  Kit                        palette and part builders
+  Atmosphere                 Future lighting, bloom, grading, sky; planet, moon, nebula, ship hull and engines
+  Architecture               per-room trim, panels, light strips, pillars, door frames, ceiling beams
+  Props                      themed hero props for each area
 ```
+
+Animated parts are tagged by the server (`VoidlineSpin`, `VoidlineOrbit`, `VoidlinePulse`, `VoidlineBob`, `VoidlineScreenBars`) and animated locally by `AmbientController`. Reduced effects turns this off.
 
 There is no hand-authored content in the place file. The ASTERION (15 areas, 22 corridors and tunnels, a lift gallery, doors, about 90 consoles) and the lobby with its training bay are built from `ShipLayout`. The UI is built by the client controllers.
 
@@ -179,9 +188,9 @@ All tuning lives in `src/shared/Config.luau`, which is frozen at runtime. The va
 
 ## Status and limitations
 
-**Done:** all twenty build phases are implemented. The full static type check passes with zero errors. The headless logic and catalog tests pass. Rojo builds a valid place file. There are no require cycles.
+**Done:** all twenty build phases are implemented. The full static type check passes with zero errors. The headless logic and catalog tests pass. The runtime harness plays a full solo round through the real server and client code: tasks, a sabotage fix, a meeting, extraction, rewards and the save. Rojo builds a valid place file. There are no require cycles.
 
-**Not done:** the game has not been run in Roblox Studio. It has to be playtested before launch, as described in [docs/LAUNCH.md](docs/LAUNCH.md).
+**Not done:** the game has not been run in Roblox Studio, and the harness fakes the Roblox engine, so it can't check rendering, physics or touch input. It has to be playtested before launch, as described in [docs/LAUNCH.md](docs/LAUNCH.md).
 
 Known limitations:
 - **No audio assets ship with the game.** Every sound is a captioned placeholder. Add original or licensed sound IDs to `AudioCatalog`.

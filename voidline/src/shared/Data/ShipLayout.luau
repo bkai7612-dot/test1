@@ -74,7 +74,9 @@ ShipLayout.TunnelHeight = 9
 ShipLayout.AnchorInset = 4
 ShipLayout.GalleryHeight = 14
 ShipLayout.MeetingRoom = "CentralOps"
-ShipLayout.LobbyCenter = { X = 0, Y = 60, Z = 420 }
+-- The departure lounge sits behind the ship, level with its decks, so the
+-- big window looks straight at the ASTERION's engines.
+ShipLayout.LobbyCenter = { X = 0, Y = 200, Z = 440 }
 
 local ROOM_DEFS = {
 	-- Fore

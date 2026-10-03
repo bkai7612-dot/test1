@@ -106,6 +106,7 @@ end
 function ctx.DismissMenu()
 	menuDismissed = true
 	UIController.CloseAllModals()
+	UIController.Refresh()
 end
 
 function ctx.StartTutorial()

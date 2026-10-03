@@ -85,6 +85,42 @@ local function frame(parent: Instance, title: string, timeLimit: number, callbac
 end
 
 ---------------------------------------------------------------------------
+-- Process (timed task: stay at the console while it runs)
+---------------------------------------------------------------------------
+function Minigames.Process(parent: Instance, challenge: any, info: any, callbacks: Callbacks): () -> ()
+	local duration = if type(challenge.Duration) == "number" then challenge.Duration else 2
+	local root, body, cleanup = frame(parent, info.Title or challenge.Label or "Working", info.TimeLimit or duration + 15, callbacks)
+	root.Size = UDim2.fromOffset(460, 230)
+	Components.label("Stay at the console while the task runs.", {
+		TextColor3 = Theme.Color.Muted,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		Parent = body,
+	})
+	local bar = Components.progress(28, Theme.Color.Accent)
+	bar.Frame.Position = UDim2.fromOffset(0, 40)
+	bar.Frame.Parent = body
+	local started = os.clock()
+	local submitted = false
+	local conn: RBXScriptConnection
+	conn = RunService.Heartbeat:Connect(function()
+		local alpha = math.clamp((os.clock() - started) / duration, 0, 1)
+		bar.Set(alpha, string.format("%s  %d%%", string.upper(challenge.Label or "Working"), math.floor(alpha * 100)))
+		if alpha >= 1 and not submitted then
+			submitted = true
+			conn:Disconnect()
+			-- Small margin so the server's clock has also passed the duration.
+			task.delay(0.15, function()
+				callbacks.Submit(true)
+			end)
+		end
+	end)
+	root.Destroying:Connect(function()
+		conn:Disconnect()
+	end)
+	return cleanup
+end
+
+---------------------------------------------------------------------------
 -- Sliders
 ---------------------------------------------------------------------------
 function Minigames.Sliders(parent: Instance, challenge: any, info: any, callbacks: Callbacks): () -> ()

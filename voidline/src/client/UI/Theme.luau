@@ -44,6 +44,7 @@ Theme.ColorblindColor = {
 }
 
 Theme.Font = {
+	Display = Enum.Font.Michroma, -- wide sci-fi face for titles only
 	Regular = Enum.Font.Gotham,
 	Medium = Enum.Font.GothamMedium,
 	Bold = Enum.Font.GothamBold,

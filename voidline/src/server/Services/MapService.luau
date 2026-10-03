@@ -17,7 +17,6 @@
 ]]
 
 local CollectionService = game:GetService("CollectionService")
-local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -26,6 +25,11 @@ local Constants = require(Shared.Constants)
 local ObjectiveCatalog = require(Shared.Data.ObjectiveCatalog)
 local ShipLayout = require(Shared.Data.ShipLayout)
 local Logger = require(Shared.Utility.Logger)
+
+local Architecture = require(script.Parent.Parent.Art.Architecture)
+local Atmosphere = require(script.Parent.Parent.Art.Atmosphere)
+local Kit = require(script.Parent.Parent.Art.Kit)
+local Props = require(script.Parent.Parent.Art.Props)
 
 local log = Logger.new("MapService")
 
@@ -67,7 +71,7 @@ local KIND_SCREEN: { [string]: Color3 } = {
 	DoorPanel = Color3.fromRGB(200, 60, 60),
 }
 
-type LightRecord = { Light: PointLight, Fixture: BasePart, Room: string, Section: string, BaseColor: Color3, BaseBrightness: number }
+type LightRecord = { Light: Light?, Fixture: BasePart, Room: string, Section: string, BaseColor: Color3, BaseBrightness: number }
 type DoorRecord = { Part: BasePart, Locked: boolean, Connection: ShipLayout.Connection }
 
 local shipFolder: Folder
@@ -135,12 +139,27 @@ local function addLight(parent: Instance, position: Vector3, roomId: string, sec
 	fixture:SetAttribute(Constants.Attribute.Section, section)
 	CollectionService:AddTag(fixture, Constants.Tag.RoomLight)
 	table.insert(lights, {
-		Light = light,
+		Light = light :: Light,
 		Fixture = fixture,
 		Room = roomId,
 		Section = section,
 		BaseColor = color,
 		BaseBrightness = brightness,
+	})
+end
+
+-- Registers a glowing decorative part so lighting modes (power failure,
+-- alarms) affect it together with the room's real lights.
+local function registerFixture(part: BasePart, roomId: string, section: string)
+	part:SetAttribute(Constants.Attribute.Room, roomId)
+	part:SetAttribute(Constants.Attribute.Section, section)
+	table.insert(lights, {
+		Light = nil,
+		Fixture = part,
+		Room = roomId,
+		Section = section,
+		BaseColor = part.Color,
+		BaseBrightness = 0,
 	})
 end
 
@@ -175,6 +194,21 @@ end
 ---------------------------------------------------------------------------
 
 -- Builds a console standing at `floorPos`, screen facing `facing` (a point).
+local KIND_HEADER: { [string]: string } = {
+	Station = "OBJECTIVE TERMINAL",
+	Breaker = "POWER BREAKER",
+	Valve = "VALVE CONTROL",
+	Node = "SYSTEMS NODE",
+	Terminal = "SECURITY",
+	Beacon = "MUSTER BEACON",
+	Console = "HELM CONTROL",
+	Lift = "GALLERY LIFT",
+	Escape = "EXTRACTION",
+	DoorPanel = "DOOR CONTROL",
+}
+
+-- Builds a console standing at `floorPos`, screen facing `facing` (a point).
+-- The screen's "Title" label is what MapService.SetScreen writes to.
 local function buildConsole(parent: Instance, anchorId: string, floorPos: Vector3, facing: Vector3, kind: string, label: string): BasePart
 	local model = Instance.new("Model")
 	model.Name = anchorId
@@ -185,71 +219,110 @@ local function buildConsole(parent: Instance, anchorId: string, floorPos: Vector
 		look = floorPos + Vector3.new(0, 0, 1)
 	end
 	local base = CFrame.lookAt(floorPos, look)
+	local accent = KIND_SCREEN[kind] or PALETTE.Screen
+	local tilt = CFrame.Angles(math.rad(-28), 0, 0)
 
-	makePart({
-		Name = "Base",
-		Size = Vector3.new(2.6, 3, 1.6),
-		CFrame = base * CFrame.new(0, 1.5, 0.3),
-		Color = PALETTE.Console,
-		Material = Enum.Material.Metal,
-	}, model)
-
-	local screenColor = KIND_SCREEN[kind] or PALETTE.Screen
-	local panel = makePart({
-		Name = "Panel",
-		Size = Vector3.new(2.4, 1.6, 0.3),
-		CFrame = base * CFrame.new(0, 3.4, -0.1) * CFrame.Angles(math.rad(-25), 0, 0),
-		Color = screenColor,
-		Material = Enum.Material.Glass,
-		CanCollide = false,
-	}, model)
-	model.PrimaryPart = panel
-
-	if kind == "Valve" then
-		makePart({
-			ClassName = "Part",
-			Name = "Wheel",
-			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(0.4, 2.2, 2.2),
-			CFrame = base * CFrame.new(1.8, 2, -0.2) * CFrame.Angles(0, math.rad(90), 0),
-			Color = Color3.fromRGB(200, 60, 50),
-			Material = Enum.Material.Metal,
-			CanCollide = false,
-		}, model)
-	elseif kind == "Beacon" then
-		makePart({
-			Name = "Dome",
-			Shape = Enum.PartType.Ball,
-			Size = Vector3.new(2.4, 2.4, 2.4),
-			CFrame = base * CFrame.new(0, 3.6, 0.3),
-			Color = Color3.fromRGB(230, 50, 50),
-			Material = Enum.Material.Neon,
-			CanCollide = false,
-		}, model)
+	-- Body: footplate, column, angled desk head, status strip and buttons.
+	makePart({ Name = "Foot", Size = Vector3.new(3.4, 0.3, 2.6), CFrame = base * CFrame.new(0, 0.15, 0.4), Color = Kit.Color.Trim, Material = Enum.Material.DiamondPlate, CastShadow = false }, model)
+	makePart({ Name = "Column", Size = Vector3.new(1.8, 2.6, 1.3), CFrame = base * CFrame.new(0, 1.6, 0.55), Color = Kit.Color.Hull, Material = Enum.Material.Metal }, model)
+	makePart({ Name = "Head", Size = Vector3.new(3.2, 0.5, 2.1), CFrame = base * CFrame.new(0, 3.1, 0.15) * tilt, Color = Kit.Color.HullDark, Material = Enum.Material.Metal }, model)
+	local strip = makePart({ Name = "StatusStrip", Size = Vector3.new(0.18, 2.1, 0.06), CFrame = base * CFrame.new(0, 1.6, -0.12), Color = accent, Material = Enum.Material.Neon, CanCollide = false, CanQuery = false, CastShadow = false }, model)
+	Kit.pulse(strip, 0.7)
+	for i = -1, 1 do
+		makePart({ Name = "Button", Shape = Enum.PartType.Ball, Size = Vector3.one * 0.22, CFrame = base * CFrame.new(i * 0.45, 2.95, -0.85), Color = if i == 0 then Kit.Color.Amber else accent, Material = Enum.Material.Neon, CanCollide = false, CanQuery = false, CastShadow = false }, model)
 	end
 
+	local panel = makePart({
+		Name = "Panel",
+		Size = Vector3.new(2.9, 1.8, 0.15),
+		CFrame = base * CFrame.new(0, 3.75, 0.05) * tilt,
+		Color = Color3.fromRGB(10, 18, 28),
+		Material = Enum.Material.Glass,
+		CanCollide = false,
+		CastShadow = false,
+	}, model)
+	model.PrimaryPart = panel
+	makePart({ Name = "Bezel", Size = Vector3.new(3.1, 0.14, 0.1), CFrame = panel.CFrame * CFrame.new(0, -0.95, -0.05), Color = accent, Material = Enum.Material.Neon, CanCollide = false, CanQuery = false, CastShadow = false }, model)
+
+	if kind == "Valve" then
+		makePart({ Name = "Wheel", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.35, 2.2, 2.2), CFrame = base * CFrame.new(2, 2.1, 0.4) * CFrame.Angles(0, math.rad(90), 0), Color = Color3.fromRGB(200, 60, 50), Material = Enum.Material.Metal, CanCollide = false }, model)
+		makePart({ Name = "ValvePipe", Shape = Enum.PartType.Cylinder, Size = Vector3.new(2.6, 0.7, 0.7), CFrame = base * CFrame.new(2, 1.3, 0.6) * CFrame.Angles(0, 0, math.rad(90)), Color = Kit.Color.Copper, Material = Enum.Material.Metal }, model)
+	elseif kind == "Beacon" then
+		local dome = makePart({ Name = "Dome", Shape = Enum.PartType.Ball, Size = Vector3.one * 2, CFrame = base * CFrame.new(0, 4.9, 0.6), Color = Color3.fromRGB(235, 60, 60), Material = Enum.Material.Neon, CanCollide = false, CastShadow = false }, model)
+		Kit.pulse(dome, 1.2)
+		local light = Instance.new("PointLight")
+		light.Color = Color3.fromRGB(255, 80, 80)
+		light.Range = 14
+		light.Brightness = 1.5
+		light.Parent = dome
+	elseif kind == "Breaker" then
+		Kit.hazardStrip(model, 1.8, 0.08, 0.5, base * CFrame.new(0, 0.6, -0.13), "X", 0.45)
+	elseif kind == "Escape" then
+		Kit.hazardStrip(model, 3.4, 0.1, 0.3, base * CFrame.new(0, 0.45, -0.9), "X", 0.5)
+	end
+
+	-- Screen UI: header bar, title, animated level bars (animated on clients).
 	local gui = Instance.new("SurfaceGui")
 	gui.Face = Enum.NormalId.Front
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	gui.PixelsPerStud = 60
+	gui.PixelsPerStud = 80
 	gui.LightInfluence = 0
-	gui.MaxDistance = 60
+	gui.Brightness = 1.4
+	gui.MaxDistance = 70
 	gui.Parent = panel
+	local background = Instance.new("Frame")
+	background.Name = "Background"
+	background.Size = UDim2.fromScale(1, 1)
+	background.BackgroundColor3 = Color3.fromRGB(6, 12, 20)
+	background.BorderSizePixel = 0
+	background.Parent = gui
+	local gradient = Instance.new("UIGradient")
+	gradient.Color = ColorSequence.new(Color3.fromRGB(14, 28, 42), Color3.fromRGB(4, 8, 14))
+	gradient.Rotation = 90
+	gradient.Parent = background
+	local header = Instance.new("TextLabel")
+	header.Name = "Header"
+	header.Size = UDim2.fromScale(1, 0.22)
+	header.BackgroundColor3 = accent
+	header.BackgroundTransparency = 0.25
+	header.BorderSizePixel = 0
+	header.Font = Enum.Font.GothamBold
+	header.TextScaled = true
+	header.TextColor3 = Color3.fromRGB(240, 248, 255)
+	header.Text = KIND_HEADER[kind] or "CONSOLE"
+	header.Parent = background
 	local text = Instance.new("TextLabel")
-	text.Size = UDim2.fromScale(1, 1)
-	text.BackgroundColor3 = Color3.fromRGB(8, 14, 22)
-	text.BackgroundTransparency = 0.15
+	text.Name = "Title"
+	text.Position = UDim2.fromScale(0.06, 0.27)
+	text.Size = UDim2.fromScale(0.88, 0.42)
+	text.BackgroundTransparency = 1
 	text.Font = Enum.Font.GothamBold
 	text.TextScaled = true
 	text.TextColor3 = Color3.fromRGB(220, 240, 255)
 	text.Text = label
-	text.Parent = gui
-	local padding = Instance.new("UIPadding")
-	padding.PaddingLeft = UDim.new(0.06, 0)
-	padding.PaddingRight = UDim.new(0.06, 0)
-	padding.PaddingTop = UDim.new(0.1, 0)
-	padding.PaddingBottom = UDim.new(0.1, 0)
-	padding.Parent = text
+	text.Parent = background
+	local bars = Instance.new("Frame")
+	bars.Name = "Bars"
+	bars.Position = UDim2.fromScale(0.08, 0.74)
+	bars.Size = UDim2.fromScale(0.84, 0.2)
+	bars.BackgroundTransparency = 1
+	bars.Parent = background
+	local layout = Instance.new("UIListLayout")
+	layout.FillDirection = Enum.FillDirection.Horizontal
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+	layout.Padding = UDim.new(0.02, 0)
+	layout.Parent = bars
+	for i = 1, 10 do
+		local bar = Instance.new("Frame")
+		bar.Name = "Bar" .. i
+		bar.Size = UDim2.fromScale(0.08, 0.3 + ((i * 37) % 7) / 10)
+		bar.BackgroundColor3 = accent
+		bar.BorderSizePixel = 0
+		bar.LayoutOrder = i
+		bar.Parent = bars
+	end
+	CollectionService:AddTag(bars, "VoidlineScreenBars")
 
 	panel:SetAttribute(Constants.Attribute.AnchorId, anchorId)
 	CollectionService:AddTag(panel, Constants.Tag.InteractAnchor)
@@ -378,6 +451,10 @@ local function buildRoomShell(room: ShipLayout.Room, parent: Instance)
 	end
 
 	buildWalls(room, parent)
+	Architecture.decorateRoom(room, parent, {
+		registerFixture = registerFixture,
+		doorsBySide = doorsBySide[room.Id] or {},
+	})
 
 	-- Lights: bigger rooms get two.
 	local lightY = FLOOR_Y + room.Height - 0.3
@@ -405,141 +482,6 @@ local function buildRoomShell(room: ShipLayout.Room, parent: Instance)
 		end
 		-- Readable from inside the room, above the doorway.
 		addSign(parent, cframe * CFrame.new(0, 0, -0.3), room.Name, accent)
-	end
-end
-
--- Decorative props per theme. Kept clear of anchors and doorway paths.
-local function buildProps(room: ShipLayout.Room, parent: Instance)
-	local cx, cz = room.CenterX, room.CenterZ
-	local function at(x: number, y: number, z: number): Vector3
-		return Vector3.new(cx + x, FLOOR_Y + y, cz + z)
-	end
-	local function box(name: string, size: Vector3, pos: Vector3, color: Color3, material: Enum.Material?)
-		makePart({ Name = name, Size = size, Position = pos, Color = color, Material = material or Enum.Material.Metal }, parent)
-	end
-	local theme = room.Theme
-
-	if theme == "Operations" then
-		makePart({
-			Name = "MusterTable",
-			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(3, 12, 12),
-			CFrame = vertical(at(0, 1.5, 0)),
-			Color = Color3.fromRGB(70, 76, 88),
-			Material = Enum.Material.Metal,
-		}, parent)
-		makePart({
-			Name = "MusterRing",
-			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(0.1, 30, 30),
-			CFrame = vertical(at(0, 0.06, 0)),
-			Color = SECTION_COLORS.Mid,
-			Material = Enum.Material.Neon,
-			Transparency = 0.6,
-			CanCollide = false,
-			CanQuery = false,
-		}, parent)
-	elseif theme == "Reactor" then
-		makePart({
-			Name = "ReactorCore",
-			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(room.Height - 2, 9, 9),
-			CFrame = vertical(at(0, (room.Height - 2) / 2, 0)),
-			Color = Color3.fromRGB(120, 220, 255),
-			Material = Enum.Material.Neon,
-		}, parent)
-		makePart({
-			Name = "CoreShield",
-			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(4, 13, 13),
-			CFrame = vertical(at(0, 2, 0)),
-			Color = PALETTE.WallDark,
-			Material = Enum.Material.Metal,
-		}, parent)
-	elseif theme == "Hydroponics" then
-		for _, x in { -20, -10 } do
-			box("Planter", Vector3.new(5, 2.5, 18), at(x, 1.25, 0), Color3.fromRGB(90, 70, 50), Enum.Material.Wood)
-			box("Plants", Vector3.new(4.4, 1, 17), at(x, 3, 0), Color3.fromRGB(80, 190, 90), Enum.Material.Grass)
-		end
-	elseif theme == "Cargo" then
-		for _, p in { { -12, -12 }, { 12, 12 }, { -12, 12 }, { 12, -12 } } do
-			box("Crate", Vector3.new(5, 5, 5), at(p[1], 2.5, p[2]), Color3.fromRGB(150, 120, 70), Enum.Material.WoodPlanks)
-		end
-		box("Crate", Vector3.new(4, 4, 4), at(-12, 7, -12), Color3.fromRGB(110, 120, 90), Enum.Material.Metal)
-	elseif theme == "Quarters" then
-		for _, p in { { -14, -10 }, { -14, 10 }, { 14, 10 } } do
-			box("Bunk", Vector3.new(8, 2, 4), at(p[1], 1, p[2]), Color3.fromRGB(70, 90, 130), Enum.Material.Fabric)
-			box("BunkTop", Vector3.new(8, 0.6, 4), at(p[1], 5, p[2]), Color3.fromRGB(70, 90, 130), Enum.Material.Fabric)
-		end
-	elseif theme == "Medical" then
-		for _, z in { -8, 8 } do
-			box("MedBed", Vector3.new(7, 2.4, 3.4), at(-10, 1.2, z), Color3.fromRGB(220, 225, 230))
-		end
-	elseif theme == "Lab" then
-		for _, z in { -7, 7 } do
-			box("Bench", Vector3.new(12, 3, 3), at(6, 1.5, z), Color3.fromRGB(200, 205, 210))
-		end
-	elseif theme == "Bridge" then
-		box("HelmDesk", Vector3.new(16, 3, 3), at(0, 1.5, -12), Color3.fromRGB(60, 66, 78))
-	elseif theme == "Comms" then
-		for _, p in { { 8, 8 }, { -8, 8 } } do
-			makePart({
-				Name = "Antenna",
-				Shape = Enum.PartType.Cylinder,
-				Size = Vector3.new(12, 1.4, 1.4),
-				CFrame = vertical(at(p[1], 6, p[2])),
-				Color = Color3.fromRGB(160, 165, 175),
-				Material = Enum.Material.Metal,
-			}, parent)
-		end
-	elseif theme == "Shelter" then
-		for _, z in { -10, 10 } do
-			box("Bench", Vector3.new(3, 2, 10), at(14, 1, z), Color3.fromRGB(60, 120, 80), Enum.Material.Fabric)
-		end
-	elseif theme == "Hangar" then
-		box("ShuttleBody", Vector3.new(12, 6, 18), at(-12, 3, 0), Color3.fromRGB(220, 220, 225))
-		box("ShuttleCockpit", Vector3.new(8, 3, 4), at(-12, 5, -10), Color3.fromRGB(80, 160, 220), Enum.Material.Glass)
-		box("ShuttleFin", Vector3.new(1, 5, 5), at(-12, 8, 7), Color3.fromRGB(230, 120, 30))
-	elseif theme == "Engineering" then
-		box("Generator", Vector3.new(8, 5, 6), at(0, 2.5, 10), Color3.fromRGB(90, 96, 110))
-		makePart({
-			Name = "Pipe",
-			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(room.SizeX - 4, 1.6, 1.6),
-			Position = at(0, room.Height - 2, -14),
-			Color = Color3.fromRGB(150, 110, 60),
-			Material = Enum.Material.Metal,
-			CanCollide = false,
-		}, parent)
-	elseif theme == "Junction" or theme == "Maintenance" then
-		makePart({
-			Name = "Pipe",
-			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(room.Height, 2, 2),
-			CFrame = vertical(at(-room.SizeX / 2 + 3, room.Height / 2, -room.SizeZ / 2 + 10)),
-			Color = Color3.fromRGB(150, 110, 60),
-			Material = Enum.Material.Metal,
-		}, parent)
-	elseif theme == "Observation" then
-		-- Gallery along the north window, reached by lift.
-		local galleryDepth = 12
-		local hz = room.SizeZ / 2
-		box(
-			"Gallery",
-			Vector3.new(room.SizeX, 1, galleryDepth),
-			at(0, ShipLayout.GalleryHeight - 0.5, -hz + galleryDepth / 2),
-			Color3.fromRGB(60, 64, 74),
-			Enum.Material.DiamondPlate
-		)
-		makePart({
-			Name = "GalleryRail",
-			Size = Vector3.new(room.SizeX, 3, 0.4),
-			Position = at(0, ShipLayout.GalleryHeight + 1.5, -hz + galleryDepth),
-			Color = PALETTE.Glass,
-			Material = Enum.Material.Glass,
-			Transparency = 0.5,
-		}, parent)
-		addLight(parent, at(0, room.Height - 0.3, -hz + 6), room.Id, room.Section, 30, PALETTE.Light, 1)
 	end
 end
 
@@ -605,6 +547,11 @@ local function buildConnection(connection: ShipLayout.Connection, parent: Instan
 		if isTunnel then PALETTE.TunnelLight else PALETTE.Light,
 		if isTunnel then 0.7 else 1
 	)
+
+	Architecture.decorateConnection(connection, model, {
+		registerFixture = registerFixture,
+		doorsBySide = {},
+	})
 
 	-- Door at the A end (in the room's wall gap). Open by default.
 	local doorPos = if alongX
@@ -718,21 +665,16 @@ local function buildLobby(parent: Instance)
 	local c = ShipLayout.LobbyCenter
 	local center = Vector3.new(c.X, c.Y, c.Z)
 	local sizeX, sizeZ, height = 140, 100, 26
+	local accent = Kit.SectionColor.Lobby
+	local function at(x: number, y: number, z: number): CFrame
+		return CFrame.new(center + Vector3.new(x, y, z))
+	end
 
-	makePart({
-		Name = "Floor",
-		Size = Vector3.new(sizeX, 1, sizeZ),
-		Position = center - Vector3.new(0, 0.5, 0),
-		Color = Color3.fromRGB(56, 60, 70),
-		Material = Enum.Material.Metal,
-	}, parent)
-	makePart({
-		Name = "Ceiling",
-		Size = Vector3.new(sizeX + 2, 1, sizeZ + 2),
-		Position = center + Vector3.new(0, height + 0.5, 0),
-		Color = PALETTE.Ceiling,
-		CastShadow = false,
-	}, parent)
+	-- Shell: floor, ceiling, three solid walls and a full-height window facing the ship.
+	makePart({ Name = "Floor", Size = Vector3.new(sizeX, 1, sizeZ), Position = center - Vector3.new(0, 0.5, 0), Color = Kit.Color.Floor, Material = Enum.Material.Metal }, parent)
+	Kit.box(parent, "FloorInset", Vector3.new(sizeX - 20, 0.1, sizeZ - 30), at(0, 0.05, 5), Kit.Color.FloorInset, Enum.Material.DiamondPlate)
+	Kit.cylinder(parent, "FloorRing", 0.12, 36, at(-20, 0.08, 10), accent, Enum.Material.Neon, "Y").Transparency = 0.55
+	makePart({ Name = "Ceiling", Size = Vector3.new(sizeX + 2, 1, sizeZ + 2), Position = center + Vector3.new(0, height + 0.5, 0), Color = PALETTE.Ceiling, CastShadow = false }, parent)
 	local walls: { { Offset: Vector3, Size: Vector3, Glass: boolean } } = {
 		{ Offset = Vector3.new(0, height / 2, -sizeZ / 2 - 0.5), Size = Vector3.new(sizeX + 2, height, 1), Glass = true },
 		{ Offset = Vector3.new(0, height / 2, sizeZ / 2 + 0.5), Size = Vector3.new(sizeX + 2, height, 1), Glass = false },
@@ -745,16 +687,57 @@ local function buildLobby(parent: Instance)
 			Name = if glass then "Window" else "Wall",
 			Size = spec.Size,
 			Position = center + spec.Offset,
-			Color = if glass then PALETTE.Glass else PALETTE.Wall,
+			Color = if glass then PALETTE.Glass else Kit.Color.Panel,
 			Material = if glass then Enum.Material.Glass else Enum.Material.SmoothPlastic,
-			Transparency = if glass then 0.5 else 0,
+			Transparency = if glass then 0.75 else 0,
+			CastShadow = not glass,
 		}, parent)
+	end
+	-- Window mullions and sill.
+	for i = -3, 3 do
+		Kit.box(parent, "Mullion", Vector3.new(1.2, height, 1.4), at(i * 20, height / 2, -sizeZ / 2 + 0.2), Kit.Color.Trim, Enum.Material.Metal, true)
+	end
+	Kit.box(parent, "Sill", Vector3.new(sizeX, 1.5, 3), at(0, 0.75, -sizeZ / 2 + 1.5), Kit.Color.Trim, Enum.Material.Metal, true)
+	Kit.neon(parent, "SillGlow", Vector3.new(sizeX, 0.2, 0.3), at(0, 1.55, -sizeZ / 2 + 3), accent)
+
+	-- Side walls: pillars, light strips, baseboards.
+	for _, side in { -1, 1 } do
+		for i = -2, 2 do
+			Kit.box(parent, "Pillar", Vector3.new(1.4, height, 2.4), at(side * (sizeX / 2 - 0.7), height / 2, i * 18), Kit.Color.PanelDark, Enum.Material.Metal, true)
+		end
+		Kit.neon(parent, "WallStrip", Vector3.new(0.3, 0.3, sizeZ - 4), at(side * (sizeX / 2 - 0.2), height - 3, 0), accent)
+		Kit.box(parent, "Baseboard", Vector3.new(0.6, 1.2, sizeZ), at(side * (sizeX / 2 - 0.3), 0.6, 0), Kit.Color.Trim, Enum.Material.Metal)
+	end
+	Kit.box(parent, "BackBaseboard", Vector3.new(sizeX, 1.2, 0.6), at(0, 0.6, sizeZ / 2 - 0.3), Kit.Color.Trim, Enum.Material.Metal)
+
+	-- Ceiling beams and light panels.
+	for i = -3, 3 do
+		Kit.box(parent, "Beam", Vector3.new(1.2, 1.4, sizeZ), at(i * 20, height - 0.7, 0), Kit.Color.Trim, Enum.Material.Metal)
 	end
 	for _, x in { -45, 0, 45 } do
 		for _, z in { -25, 25 } do
 			addLight(parent, center + Vector3.new(x, height - 0.3, z), "Lobby", "Lobby", 50, PALETTE.Light, 1.3)
+			Kit.neon(parent, "CeilingPanel", Vector3.new(10, 0.15, 4), at(x, height - 0.25, z + 6), Color3.fromRGB(225, 235, 255))
 		end
 	end
+
+	-- Waiting area: benches facing the window, planters, a holo kiosk.
+	for _, x in { -40, -14, 14, 40 } do
+		Kit.box(parent, "Bench", Vector3.new(14, 0.8, 3), at(x, 1.6, -26), Kit.Color.PanelDark, Enum.Material.Fabric, true)
+		Kit.box(parent, "BenchBack", Vector3.new(14, 2.4, 0.6), at(x, 2.8, -24.6), Kit.Color.PanelDark, Enum.Material.Fabric, true)
+		for _, dx in { -6, 6 } do
+			Kit.box(parent, "BenchLeg", Vector3.new(0.6, 1.2, 2.4), at(x + dx, 0.6, -26), Kit.Color.Trim, Enum.Material.Metal)
+		end
+	end
+	for _, x in { -60, 60 } do
+		Kit.box(parent, "Planter", Vector3.new(6, 2, 6), at(x, 1, 36), Kit.Color.HullDark, Enum.Material.Metal, true)
+		Kit.ball(parent, "Shrub", 5, at(x, 3.6, 36), Kit.Color.Plant, Enum.Material.Grass)
+	end
+	local kiosk = Kit.cylinder(parent, "Kiosk", 3, 4, at(-20, 1.5, 32), Kit.Color.Hull, Enum.Material.Metal, "Y", true)
+	kiosk.Name = "Kiosk"
+	local globe = Kit.ball(parent, "KioskHologram", 3.5, at(-20, 6, 32), accent, Enum.Material.Neon, 0.5)
+	Kit.spin(globe, 25, "Y")
+	Kit.bob(globe, 0.4)
 
 	lobbySpawn = Instance.new("SpawnLocation")
 	lobbySpawn.Name = "LobbySpawn"
@@ -763,18 +746,48 @@ local function buildLobby(parent: Instance)
 	lobbySpawn.Duration = 0
 	lobbySpawn.Size = Vector3.new(12, 1, 12)
 	lobbySpawn.Position = center + Vector3.new(-20, 0, 10)
-	lobbySpawn.Color = Color3.fromRGB(86, 214, 255)
+	lobbySpawn.Color = accent
 	lobbySpawn.Material = Enum.Material.Neon
 	lobbySpawn.Transparency = 0.6
 	lobbySpawn.TopSurface = Enum.SurfaceType.Smooth
 	lobbySpawn.Parent = parent
 
-	addSign(
-		parent,
-		CFrame.lookAt(center + Vector3.new(0, 18, sizeZ / 2 - 0.3), center + Vector3.new(0, 18, 0)),
-		"VOIDLINE  //  ASTERION DEPARTURES",
-		Color3.fromRGB(86, 214, 255)
-	)
+	-- Departures board on the back wall.
+	local board = makePart({
+		Name = "DeparturesBoard",
+		Size = Vector3.new(40, 12, 0.6),
+		CFrame = CFrame.lookAt(center + Vector3.new(-10, 15, sizeZ / 2 - 0.4), center + Vector3.new(-10, 15, 0)),
+		Color = Color3.fromRGB(8, 12, 20),
+		Material = Enum.Material.SmoothPlastic,
+		CanCollide = false,
+	}, parent)
+	local boardGui = Instance.new("SurfaceGui")
+	boardGui.Face = Enum.NormalId.Front
+	boardGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	boardGui.PixelsPerStud = 30
+	boardGui.LightInfluence = 0
+	boardGui.Brightness = 1.5
+	boardGui.Parent = board
+	local boardLines: { { Text: string, Color: Color3 } } = {
+		{ Text = "VOIDLINE  //  DEPARTURES", Color = accent },
+		{ Text = "ASTERION ............ BOARDING", Color = Color3.fromRGB(255, 196, 92) },
+		{ Text = "RESEARCH TENDER 7 .... DELAYED", Color = Color3.fromRGB(150, 160, 180) },
+		{ Text = "SURVEY DRONE ARC ..... DEPARTED", Color = Color3.fromRGB(150, 160, 180) },
+	}
+	for index, line in boardLines do
+		local label = Instance.new("TextLabel")
+		label.BackgroundTransparency = 1
+		label.Position = UDim2.fromScale(0.04, 0.06 + (index - 1) * 0.23)
+		label.Size = UDim2.fromScale(0.92, if index == 1 then 0.24 else 0.18)
+		label.Font = if index == 1 then Enum.Font.GothamBold else Enum.Font.RobotoMono
+		label.TextScaled = true
+		label.TextXAlignment = Enum.TextXAlignment.Left
+		label.TextColor3 = line.Color
+		label.Text = line.Text
+		label.Parent = boardGui
+	end
+	Kit.neon(parent, "BoardFrame", Vector3.new(41, 0.4, 0.4), at(-10, 21.2, sizeZ / 2 - 0.6), accent)
+	Kit.neon(parent, "BoardFrame", Vector3.new(41, 0.4, 0.4), at(-10, 8.8, sizeZ / 2 - 0.6), accent)
 
 	-- Training bay (east end): client-only practice props for the tutorial.
 	local bay = folder("TrainingBay", parent)
@@ -815,21 +828,10 @@ end
 -- Lifecycle
 ---------------------------------------------------------------------------
 
-local function configureLighting()
-	Lighting.ClockTime = 0
-	Lighting.Brightness = 1
-	Lighting.Ambient = Color3.fromRGB(42, 46, 58)
-	Lighting.OutdoorAmbient = Color3.fromRGB(30, 32, 44)
-	Lighting.EnvironmentDiffuseScale = 0.2
-	Lighting.EnvironmentSpecularScale = 0.3
-	Lighting.GlobalShadows = true
-	Lighting.FogEnd = 100000
-end
-
 function MapService.Init()
 	local started = os.clock()
 	indexDoors()
-	configureLighting()
+	Atmosphere.applyLighting()
 
 	local activeMap = workspace:FindFirstChild("ActiveMap") or folder("ActiveMap", workspace)
 	local lobbyRoot = workspace:FindFirstChild("Lobby") or folder("Lobby", workspace)
@@ -841,13 +843,14 @@ function MapService.Init()
 	for _, room in ShipLayout.Rooms do
 		local roomFolder = folder(room.Id, roomsFolder)
 		buildRoomShell(room, roomFolder)
-		buildProps(room, roomFolder)
+		Props.build(room, roomFolder)
 	end
 	local connectionsFolder = folder("Connections", shipFolder)
 	for _, connection in ShipLayout.Connections do
 		buildConnection(connection, connectionsFolder)
 	end
 	buildInteractives(shipFolder)
+	Atmosphere.buildExterior(shipFolder)
 	buildLobby(lobbyFolder)
 
 	local count = 0
@@ -993,25 +996,35 @@ end
 export type LightMode = "Normal" | "Off" | "Dim" | "Alarm"
 
 local function applyLight(record: LightRecord, mode: LightMode)
+	local light = record.Light
 	if mode == "Normal" then
-		record.Light.Enabled = true
-		record.Light.Color = record.BaseColor
-		record.Light.Brightness = record.BaseBrightness
+		if light then
+			light.Enabled = true
+			light.Color = record.BaseColor
+			light.Brightness = record.BaseBrightness
+		end
 		record.Fixture.Color = record.BaseColor
 		record.Fixture.Material = Enum.Material.Neon
 	elseif mode == "Off" then
-		record.Light.Enabled = false
+		if light then
+			light.Enabled = false
+		end
 		record.Fixture.Color = Color3.fromRGB(30, 30, 34)
 		record.Fixture.Material = Enum.Material.SmoothPlastic
 	elseif mode == "Dim" then
-		record.Light.Enabled = true
-		record.Light.Color = record.BaseColor
-		record.Light.Brightness = record.BaseBrightness * 0.25
+		if light then
+			light.Enabled = true
+			light.Color = record.BaseColor
+			light.Brightness = record.BaseBrightness * 0.25
+		end
 		record.Fixture.Color = record.BaseColor:Lerp(Color3.new(0, 0, 0), 0.6)
+		record.Fixture.Material = Enum.Material.Neon
 	elseif mode == "Alarm" then
-		record.Light.Enabled = true
-		record.Light.Color = Color3.fromRGB(255, 70, 60)
-		record.Light.Brightness = record.BaseBrightness * 0.9
+		if light then
+			light.Enabled = true
+			light.Color = Color3.fromRGB(255, 70, 60)
+			light.Brightness = record.BaseBrightness * 0.9
+		end
 		record.Fixture.Color = Color3.fromRGB(255, 70, 60)
 		record.Fixture.Material = Enum.Material.Neon
 	end

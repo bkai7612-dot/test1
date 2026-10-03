@@ -340,9 +340,9 @@ local function failStation(player: Player, key: string, reason: string)
 	endSession(player, false, reason)
 end
 
-local function startSession(player: Player, key: string, ref: TaskRef, kind: string, title: string)
+local function startSession(player: Player, key: string, ref: TaskRef, kind: string, title: string, options: Minigames.Options?)
 	sessionCounter += 1
-	local challenge, secret = Minigames.generate(kind, Random.new())
+	local challenge, secret = Minigames.generate(kind, Random.new(), options)
 	local session: Session = {
 		Id = "M" .. sessionCounter,
 		Player = player,
@@ -353,9 +353,10 @@ local function startSession(player: Player, key: string, ref: TaskRef, kind: str
 		Ref = ref,
 	}
 	sessions[player] = session
+	local _, maxSeconds = Minigames.limits(kind, secret)
 	RemoteService.FireClient(Net.Names.MinigameStart, player, session.Id, kind, challenge, {
 		Title = title,
-		TimeLimit = Minigames.TimeLimit[kind],
+		TimeLimit = maxSeconds,
 	})
 	InteractionService.Refresh()
 end
@@ -366,11 +367,12 @@ local function onSubmit(player: Player, sessionId: string, answer: any)
 		return
 	end
 	local elapsed = os.clock() - session.StartedAt
-	if elapsed < (Minigames.MinSeconds[session.Kind] or 1) then
+	local minSeconds, maxSeconds = Minigames.limits(session.Kind, session.Secret)
+	if elapsed < minSeconds then
 		failStation(player, session.StationKey, "Too fast - recalibrating.")
 		return
 	end
-	if elapsed > (Minigames.TimeLimit[session.Kind] or 25) + Config.Objectives.MinigameGraceSeconds then
+	if elapsed > maxSeconds + Config.Objectives.MinigameGraceSeconds then
 		failStation(player, session.StationKey, "Timed out.")
 		return
 	end
@@ -412,7 +414,6 @@ end
 
 local function registerStation(key: string, objective: ObjectiveCatalog.Objective, stepIndex: number)
 	local step = objective.Steps[stepIndex]
-	local isMinigame = ObjectiveCatalog.MinigameKinds[step.Kind] == true
 	local station = step.Stations[picks[objective.Id][stepIndex]]
 	usedStations[key] = true
 	MapService.SetScreen("Station:" .. key, string.upper(objective.Name))
@@ -422,7 +423,8 @@ local function registerStation(key: string, objective: ObjectiveCatalog.Objectiv
 		Anchor = "Station:" .. key,
 		Action = step.Label,
 		Object = objective.Name,
-		Hold = if isMinigame then 0 else (step.Hold or 2),
+		-- One press/click opens the task panel; timing happens in the session.
+		Hold = 0,
 		Key = 1,
 		Visible = function(player)
 			if not MatchService.InPlay() or not MatchService.IsActive(player) or sessions[player] then
@@ -466,7 +468,11 @@ local function registerStation(key: string, objective: ObjectiveCatalog.Objectiv
 			if ObjectiveCatalog.MinigameKinds[currentStep.Kind] then
 				startSession(player, key, ref, currentStep.Kind, currentStep.Label)
 			else
-				completeStep(player, ref, key)
+				-- Hold / pickup / install steps: a timed task the player stays at.
+				startSession(player, key, ref, "Process", currentStep.Label, {
+					Duration = currentStep.Hold or 2,
+					Label = currentStep.Label,
+				})
 			end
 		end,
 	})
@@ -610,7 +616,9 @@ function ObjectiveService.Start()
 	RemoteService.OnEvent(Net.Names.MinigameSubmit, {
 		Validate.string(24),
 		function(value: any)
-			if type(value) == "string" then
+			if type(value) == "boolean" then
+				return true
+			elseif type(value) == "string" then
 				return #value <= 12, "answer too long"
 			elseif type(value) == "table" then
 				local n = 0
@@ -652,7 +660,8 @@ function ObjectiveService.Start()
 			task.wait(1)
 			local now = os.clock()
 			for player, session in table.clone(sessions) do
-				local limit = (Minigames.TimeLimit[session.Kind] or 25) + Config.Objectives.MinigameGraceSeconds
+				local _, maxSeconds = Minigames.limits(session.Kind, session.Secret)
+				local limit = maxSeconds + Config.Objectives.MinigameGraceSeconds
 				if now - session.StartedAt > limit then
 					failStation(player, session.StationKey, "Timed out.")
 				end

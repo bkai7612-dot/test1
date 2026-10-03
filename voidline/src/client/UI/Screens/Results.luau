@@ -37,7 +37,7 @@ return function(ctx: any)
 		Position = UDim2.new(0.5, 0, 0, 40),
 		Size = UDim2.fromOffset(900, 60),
 		AutomaticSize = Enum.AutomaticSize.None,
-		Font = Theme.Font.Bold,
+		Font = Theme.Font.Display,
 		TextSize = Theme.TextSize.Hero,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		Parent = root,

@@ -7,6 +7,8 @@
 	and ObjectiveService also enforces a minimum solve time.
 
 	Kinds:
+	  Process  - challenge { Duration, Label }                      answer true
+	             (stay at the console while a task runs; the server times it)
 	  Sliders  - challenge { Targets = {n, n, n}, Tolerance }       answer { n, n, n }
 	  Sequence - challenge { Code = "47192" }                       answer "47192"
 	  Timing   - challenge { Zones = {{Start, Width}...}, Period }  answer { Hits, Misses }
@@ -28,8 +30,22 @@ local TIMING_ZONES = 3
 local TIMING_REQUIRED = 3
 local TIMING_MAX_MISSES = 2
 
-function Minigames.generate(kind: string, rng: Types.Rng): (any, any)
-	if kind == "Sliders" then
+export type Options = { Duration: number?, Label: string? }
+
+-- Minimum and maximum seconds a session may take before the answer counts.
+function Minigames.limits(kind: string, secret: any): (number, number)
+	if kind == "Process" then
+		local duration = if type(secret) == "table" and type(secret.Duration) == "number" then secret.Duration else 2
+		return duration * 0.9, duration + 15
+	end
+	return Minigames.MinSeconds[kind] or 1, Minigames.TimeLimit[kind] or 25
+end
+
+function Minigames.generate(kind: string, rng: Types.Rng, options: Options?): (any, any)
+	if kind == "Process" then
+		local duration = math.clamp((options and options.Duration) or 2, 0.5, 10)
+		return { Duration = duration, Label = (options and options.Label) or "Working" }, { Duration = duration }
+	elseif kind == "Sliders" then
 		local targets = {}
 		for i = 1, SLIDER_COUNT do
 			targets[i] = rng:NextInteger(10, 90)
@@ -88,7 +104,9 @@ local function isInteger(value: any): boolean
 end
 
 function Minigames.verify(kind: string, secret: any, answer: any): (boolean, string?)
-	if kind == "Sliders" then
+	if kind == "Process" then
+		return answer == true, if answer == true then nil else "malformed"
+	elseif kind == "Sliders" then
 		if type(answer) ~= "table" or #answer ~= #secret.Targets then
 			return false, "malformed"
 		end
