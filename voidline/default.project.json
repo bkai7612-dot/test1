@@ -2,7 +2,6 @@
   "name": "Voidline",
   "tree": {
     "$className": "DataModel",
-
     "ReplicatedStorage": {
       "Shared": {
         "$path": "src/shared"
@@ -11,13 +10,11 @@
         "$className": "Folder"
       }
     },
-
     "ServerScriptService": {
       "Server": {
         "$path": "src/server"
       }
     },
-
     "ServerStorage": {
       "Maps": {
         "$className": "Folder"
@@ -29,15 +26,20 @@
         "$className": "Folder"
       }
     },
-
     "StarterPlayer": {
+      "$properties": {
+        "EnableMouseLockOption": false,
+        "CharacterUseJumpPower": false,
+        "CharacterJumpHeight": 6,
+        "CharacterWalkSpeed": 14,
+        "CameraMaxZoomDistance": 24
+      },
       "StarterPlayerScripts": {
         "Client": {
           "$path": "src/client"
         }
       }
     },
-
     "Workspace": {
       "$properties": {
         "StreamingEnabled": true

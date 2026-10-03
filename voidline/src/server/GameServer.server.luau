@@ -43,6 +43,7 @@ local SERVICE_ORDER = {
 	"RoleService",
 	-- Gameplay systems
 	"InteractionService",
+	"LiftService",
 	"EvidenceService",
 	"HazardService",
 	"ObjectiveService",

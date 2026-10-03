@@ -1,304 +1,191 @@
 # VOIDLINE
 
-*Working title.* An original multiplayer social-deduction survival game for Roblox.
-A civilian emergency crew has to stabilise the crippled research vessel **ASTERION**
-and reach extraction while hidden **Infiltrators**, compromised by a rogue AI,
-work against them.
+*Working title.* VOIDLINE is an original multiplayer social-deduction survival game for Roblox, for 6–12 players.
 
-This folder is a [Rojo](https://rojo.space) project. All game code lives in `src/` as
-`.luau` files and syncs into Roblox Studio.
+A civilian emergency crew boards the crippled research vessel **ASTERION**. They have to restore its systems and reach extraction before the hull breaks apart. Some of the crew are hidden **Infiltrators**, compromised by a rogue intelligence called **MURMUR**. Infiltrators look exactly like everyone else. They sabotage the ship, siphon isolated crew into stasis, and manipulate the vote.
 
-**Status:** Phase 1 (foundation) is done. See [Roadmap](#roadmap).
+This folder is a [Rojo](https://rojo.space) project. Everything is written in typed Luau, and both the map and the UI are built in code.
 
----
-
-## Getting started
-
-1. Install the toolchain with [Rokit](https://github.com/rojo-rbx/rokit): run `rokit install`
-   in this folder. That installs the pinned `rojo` and `luau-lsp`.
-2. Install the Rojo plugin in Roblox Studio (Plugins → Manage Plugins, or `rojo plugin install`).
-3. Pick one:
-   - **Live sync:** run `rojo serve`, open a new Baseplate in Studio, then click **Connect**
-     in the Rojo plugin.
-   - **Build a place file:** run `rojo build -o Voidline.rbxl` and open the file in Studio.
-4. Turn on **Game Settings → Security → Enable Studio Access to API Services**. The
-   DataStores arrive in Phase 14, and having this on now avoids surprises then.
-
-Type-check everything against the Roblox API with `./scripts/analyze.sh`.
+| Doc | What's in it |
+|---|---|
+| **README.md** (this file) | Game overview, architecture, how to run it |
+| [docs/LAUNCH.md](docs/LAUNCH.md) | Step-by-step launch checklist, including what only the game owner can do in Roblox |
+| [docs/TESTING.md](docs/TESTING.md) | Test plan for every system: solo, full lobby, exploits, mobile and console |
 
 ---
 
-## Project layout
+## Quick start
 
-| Repo path | Roblox location | Kind |
-|---|---|---|
-| `src/shared/` | `ReplicatedStorage.Shared` | Folder |
-| `src/shared/Config.luau` | `ReplicatedStorage.Shared.Config` | ModuleScript |
-| `src/shared/Constants.luau` | `ReplicatedStorage.Shared.Constants` | ModuleScript |
-| `src/shared/Types.luau` | `ReplicatedStorage.Shared.Types` | ModuleScript |
-| `src/shared/Net.luau` | `ReplicatedStorage.Shared.Net` | ModuleScript |
-| `src/shared/Utility/Logger.luau` | `ReplicatedStorage.Shared.Utility.Logger` | ModuleScript |
-| `src/shared/Utility/Signal.luau` | `ReplicatedStorage.Shared.Utility.Signal` | ModuleScript |
-| `src/shared/Utility/Maid.luau` | `ReplicatedStorage.Shared.Utility.Maid` | ModuleScript |
-| `src/shared/Utility/RateLimiter.luau` | `ReplicatedStorage.Shared.Utility.RateLimiter` | ModuleScript |
-| `src/shared/Utility/Validate.luau` | `ReplicatedStorage.Shared.Utility.Validate` | ModuleScript |
-| `src/shared/Utility/TableUtil.luau` | `ReplicatedStorage.Shared.Utility.TableUtil` | ModuleScript |
-| *(created at runtime)* | `ReplicatedStorage.Remotes` | Folder of RemoteEvents/Functions |
-| *(project file)* | `ReplicatedStorage.Assets` | Folder |
-| `src/server/GameServer.server.luau` | `ServerScriptService.Server.GameServer` | **Script** |
-| `src/server/Services/RemoteService.luau` | `ServerScriptService.Server.Services.RemoteService` | ModuleScript |
-| `src/server/Services/ReplicationService.luau` | `ServerScriptService.Server.Services.ReplicationService` | ModuleScript |
-| `src/server/Services/PlayerManager.luau` | `ServerScriptService.Server.Services.PlayerManager` | ModuleScript |
-| `src/server/Services/AdminService.luau` | `ServerScriptService.Server.Services.AdminService` | ModuleScript |
-| *(project file)* | `ServerStorage.Maps / Objectives / ServerAssets` | Folders |
-| `src/client/ClientMain.client.luau` | `StarterPlayer.StarterPlayerScripts.Client.ClientMain` | **LocalScript** |
-| `src/client/Controllers/ClientController.luau` | `StarterPlayer.StarterPlayerScripts.Client.Controllers.ClientController` | ModuleScript |
-| `src/client/Controllers/UIController.luau` | `StarterPlayer.StarterPlayerScripts.Client.Controllers.UIController` | ModuleScript |
-| *(project file)* | `Workspace.Lobby / ActiveMap / SpawnPoints / InteractiveObjects` | Folders |
+1. Run `rokit install`. This installs the pinned `rojo` and `luau-lsp`.
+2. Install the Rojo plugin in Roblox Studio.
+3. Get the code into Studio, either by syncing or by building a place file:
+   - **Sync:** run `rojo serve`, open a new **Baseplate** in Studio, then click **Rojo → Connect**.
+   - **Build:** run `rojo build -o Voidline.rbxl`, then open the file.
+4. Go to **Game Settings → Security** and turn on **Enable Studio Access to API Services**. Without it, saving uses an in-memory store and a "progress not saved" banner appears.
+5. Press **Play**. The ship and lobby are built when the server starts.
 
-Working without Rojo? Create the instances in the **Roblox location** column by hand and
-paste each file's contents in. `*.server.luau` is a Script, `*.client.luau` is a
-LocalScript, and everything else is a ModuleScript. Name each one after its file without
-the extension.
+Without Studio, you can still run the static checks:
 
-UI is built in code by client controllers, not authored in `StarterGui`. This keeps it
-diffable in git. The `MainMenu`/`LobbyUI`/`GameHUD`/... screens arrive in Phase 13 as
-controllers.
+```bash
+./scripts/analyze.sh                       # type-check + lint every file against the Roblox API
+LUAU=/path/to/luau python3 tests/run.py    # headless logic and catalog-integrity tests
+```
 
-`Workspace.StreamingEnabled` is set to `true` by the project file.
+---
+
+## The game
+
+### Round flow
+
+`LOBBY → PREPARATION → ROLE_ASSIGNMENT → ACTIVE_ROUND ⇄ EMERGENCY / DISCUSSION → VOTING → … → ENDGAME → RESULTS → RESET → LOBBY`
+
+| Stage | What happens |
+|---|---|
+| Lobby | Players ready up. The countdown starts once enough players are present and either most are ready or the lobby has waited long enough. Private-server hosts can change match settings and start early. |
+| Boarding | Everyone is teleported aboard, into one of several start rooms chosen at random. |
+| Role reveal | Each player privately learns whether they are **Crew** or **Infiltrator**, plus their suit **accent** (a coloured armband with a symbol). Infiltrators also learn who their allies are. |
+| Play | The crew completes objectives, which raises **Restoration**. **Stability** decays over time and drops further from failures. Infiltrators sabotage and siphon. Random ship events keep each round different. |
+| Musters | Players call a meeting by reporting a stasis pod, using the Muster Beacon, or raising a witness alert. They then discuss, audit, pull evidence and vote. |
+| Endgame | When Restoration reaches 100%, a random extraction route is chosen. The crew completes its steps, then has to be inside the extraction room when the countdown ends. |
+| Results | The winner, everyone's faction and fate, and XP, Credits and level-ups. |
+
+### Win conditions
+
+**The crew wins if:**
+- at least one crew member escapes, or
+- every infiltrator is confined.
+
+**The infiltrators win if:**
+- they equal or outnumber the living crew,
+- Stability reaches 0,
+- the endgame timer runs out, or
+- no crew member makes it to extraction.
+
+### Original mechanics
+
+| Mechanic | How it works |
+|---|---|
+| **Siphon → Stasis** | An infiltrator holds a short, visible beam on a crew member. The victim is frozen in a crystal for 25 s. Anyone can **Revive** them, and a revived victim gets a private glimpse of the attacker's accent. Anyone can also **Report** them. If nobody acts in time, the victim becomes a **Signal Ghost**. Siphoning doesn't work inside the Emergency Shelter, against a crowd of crew, or on someone who was just revived. |
+| **Accents** | Each round assigns accents from a palette smaller than the player count, so several players share each accent. A clue narrows the suspects down but never names one. Every accent has a symbol and a name, so it doesn't rely on colour. |
+| **Evidence** | **Public** evidence covers sabotage anomalies, scanned pods and audits. **Hidden** evidence covers door logs, camera counts and interference traces; it is revealed from the Security Terminal or with "Request evidence" during a muster. **Private** evidence covers what a witness saw and the glimpse a revived victim got; players can share it during a muster. |
+| **Infiltrator tools** | **Scrub** a pod to destroy its trace (scanning it afterwards still shows the trace was tampered with). **Spoof** plants one fake interference trace per round. Infiltrators can perform their cover-story tasks, but those tasks never move Restoration. |
+| **Signal Ghosts** | Ghosts can watch the crew and talk with other ghosts. Every 45 s, a ghost can send an anonymous "static whisper" into a room. |
+| **Shared objectives** | When a crew member is lost, their unfinished objectives become shared work for the crew. This only happens once the loss is revealed at a muster, so the shared list never gives away a death early. |
+| **Hazards** | One engine powers both sabotage and random events. Section power cuts, ship-wide blackouts, gravity failure, comms jams, door lockdowns, fires, hull breaches, malfunctions, reactor instability and an unknown signal can all be fixed. Coolant and oxygen are critical hazards that need two fixes. Failing a hazard costs Stability rather than ending the game. |
+
+### Controls
+
+| Action | Keyboard | Gamepad | Touch |
+|---|---|---|---|
+| Interact | E | X | tap the prompt |
+| Secondary interaction (fix, scan, siphon) | F | Y | tap the prompt |
+| Infiltrator interaction (scrub) | R | R1 | tap the prompt |
+| Sprint | Shift (hold, or toggle in Settings) | L3 | Sprint button |
+| Sabotage console (infiltrators) | Q | D-pad up | Sabotage button |
+| Radio / proximity chat | V | D-pad left | Radio button |
+| Emergency alert (witnesses) | G | D-pad right | Alert button |
+| Emotes | B | D-pad down | Emote button (lobby) |
+| Collapse objectives | Tab | – | – |
+| Menu (lobby) | M | Select | Menu button |
+| Back / close | – | B | ✕ |
+| Admin panel (admins only) | F2 | – | – |
 
 ---
 
 ## Architecture
 
-### One Script, one LocalScript
-
-There is one entry point on each side, and it loads modules in a **fixed order**:
-
 ```
-GameServer.server.luau                 ClientMain.client.luau
-  require  RemoteService                 require  ClientController
-           ReplicationService                     UIController
-           PlayerManager                 Init()   (in order)
-           AdminService                  Start()  (in order)
-  Init()   (in order)                    ClientController.SignalReady()
-  Start()  (in order)
-  BindToClose → Shutdown() (reverse order)
+src/shared  → ReplicatedStorage.Shared
+  Config, Constants, Types, Net          tuning values, protocol ids, types, the remote list
+  Data/      ShipLayout, ObjectiveCatalog, HazardCatalog, SabotageCatalog, EventCatalog,
+             CosmeticCatalog, AccentPalette, SettingsSchema, AudioCatalog
+  Logic/     StateMachine, RoleAllocator, ObjectiveAssigner, Minigames, VoteTally,
+             WinConditions, Progression, Rewards   (pure, headless-tested)
+  Utility/   Logger, Signal, Maid, RateLimiter, Validate, TableUtil, Format
+
+src/server  → ServerScriptService.Server
+  GameServer.server.luau    boots services in a fixed order: Init → Start; Shutdown on close
+  Services/  (27 modules)   Remote, Replication, PlayerManager, Data, Analytics, Notify,
+                            Map, Match, Character, Lobby, Role, Interaction, Lift, Evidence,
+                            Hazard, Objective, Sabotage, Elimination, Meeting, Escape, Event,
+                            Chat, Cosmetic, Shop, Reward, AntiCheat, Round, Admin
+
+src/client  → StarterPlayer.StarterPlayerScripts.Client
+  ClientMain.client.luau    boots controllers in a fixed order
+  Controllers/ (13)         Client (state mirror), Settings, Audio, Camera, Effects, Input,
+                            Chat, Voice, Interaction, Minigame, Nameplate, UI, Tutorial
+  UI/                       Theme, Create, Components, Minigames, Screens/ (15 screens)
 ```
 
-Every service or controller is a ModuleScript that can implement any of these:
+There is no hand-authored content in the place file. The ASTERION (15 areas, 22 corridors and tunnels, a lift gallery, doors, about 90 consoles) and the lobby with its training bay are built from `ShipLayout`. The UI is built by the client controllers.
 
-- `Init()` creates state and instances. It doesn't depend on other modules having started.
-- `Start()` binds remotes and connects events. It must not yield for long.
-- `Shutdown()` (server only) flushes work inside `BindToClose`. Phase 14 uses this for data saving.
+### Security model
 
-If any step fails, the boot **aborts with an error**. A half-started server is worse than
-a server that fails loudly. To add a system, create the module and add its name to
-`SERVICE_ORDER` / `CONTROLLER_ORDER`.
+The client never decides anything. It only requests.
 
-Modules talk to each other through plain `require` and `Signal`s, for example
-`PlayerManager.PlayerLoaded:Connect(...)`. They never use globals or `_G`.
+- **Remotes.** Every remote is listed in `Net.luau` and created by the server. Each client request passes four gates, in order:
+  1. The sender is still connected.
+  2. The sender is within a per-player rate limit for that remote.
+  3. The arguments pass type and range validation. A malformed request counts as a strike, and enough strikes gets the player kicked.
+  4. The handler runs inside `pcall`.
+- **Game rules.** Handlers then check the game rules themselves: the round state, whether the player is alive, their faction, cooldowns, range from server-side positions, and line of sight.
+- **Roles.** Roles exist only on the server. Each player receives their own role privately. Nothing role-related is written to attributes, values, teams or names. Role-specific actions, such as a siphon prompt, are only ever sent to the players allowed to use them.
+- **Objectives.** Holds are timed by the server. Mini-games are issued by the server with a secret answer, a minimum solve time, and a check that the player is still at the console.
+- **Votes.** One vote per player, and it can't be changed. Votes from players who have left are discarded, and ties confine nobody. Whether the confined player's role is revealed is configurable.
+- **Currency and rewards.** All values are computed on the server from server-tracked stats. Robux receipts are idempotent and are only acknowledged after a successful save.
+- **Data.** Saving uses DataStore session locking with retries, budget waits, stale-lock takeover and save-on-shutdown.
+- **Movement.** Server-side sanity checks correct impossible speeds and frozen-player drift. They are tolerant of lag.
+- **Admin tools.** Authorised by UserId, and re-checked for every command.
 
-### Remote architecture (`Net` + `RemoteService`)
+### Performance
 
-- `Shared/Net.luau` is the **only** list of remotes. It gives each remote's kind
-  (Event or Function), direction, and rate limit.
-- The **server creates** the `ReplicatedStorage.Remotes` folder at boot from that list.
-  If the place file already has a Remotes folder, the server deletes it. The client
-  waits for the folder with `Net.getEvent(name)` and `Net.getFunction(name)`.
-- Every client→server request goes through `RemoteService.OnEvent` or `OnInvoke`, and
-  passes four checks in order:
-  1. **Sender check.** The player must still be connected.
-  2. **Rate limit.** Each player has a token bucket per remote. Excess calls are dropped silently.
-  3. **Argument validation.** Each argument has a `Validate` check, and the argument
-     count is checked too. Rejects NaN, infinity, invalid UTF-8, extra args, wrong types
-     and out-of-range values. Each failure is a **strike**. A real client never sends a
-     malformed request, so a player with 15 strikes is kicked (configurable).
-  4. **Handler**, run inside `pcall`. Errors are logged on the server and the client
-     never sees them (a RemoteFunction just returns `nil`).
-- Handlers still have to check **game rules**, such as "is this player alive?" or "is it
-  the voting phase?". The remote layer only guarantees the shape and rate of the input.
-- `InvokeClient` is never used. A client could hang the server with it.
-- If a client→server remote has no handler, the server binds a drop handler so requests
-  don't queue up in memory, and logs a warning.
+- `StreamingEnabled` is on. Console models are persistent so prompts are always reliable.
+- Server work runs on a few low-frequency loops (0.25–1 s) rather than per-frame.
+- The client has a single Heartbeat connection, for movement and stamina. Effects run at 0.15 s.
+- Interaction lists are diffed before they are sent. Lobby state is deduplicated. Refresh requests are coalesced to one per frame.
+- Every per-player resource is released through Maids or player-removal hooks.
+- Effects quality is adjustable (Low/Medium/High), along with Reduced effects.
 
-### State replication (`ReplicationService` + `ClientController`)
+### Accessibility
 
-This is the only path for game state to reach clients.
+- A colourblind palette.
+- A symbol and a name for every accent and status, so nothing relies on colour alone.
+- Subtitles and captions for every sound cue. Sounds without audio assets still produce captions.
+- Reduced flashing and Reduced effects options.
+- Adjustable UI scale, which also scales automatically for phones and TVs.
+- Toggle sprint.
+- Full gamepad and touch support.
+- Clear objective markers.
 
-| API | Who receives it | Use for |
-|---|---|---|
-| `SetPublic(key, value)` | every client | round state, player count, timers |
-| `SetPrivate(player, key, value)` | **that player only** | their session, and later their role and infiltrator abilities |
+---
 
-- **Secrets go through `SetPrivate` only.** Never put a role or anything secret in
-  Attributes, ValueObjects, player names or any other replicated instance. Exploiters
-  can read everything that replicates.
-- Each scope has a version counter. The client asks for a full snapshot with
-  `RequestSnapshot` and ignores any live update that's older than what it already has,
-  so the initial sync and the update stream can't race.
-- `ClientController` keeps a **read-only mirror** of that state and exposes it through
-  `PublicChanged`, `PrivateChanged`, `Notified` and `Synced` signals. The client uses
-  the mirror only for UI and effects. It never decides anything.
+## Balancing
 
-### PlayerManager
+All tuning lives in `src/shared/Config.luau`, which is frozen at runtime. The values most worth adjusting during playtests:
 
-PlayerManager keeps a server-side `PlayerSession` for each player, moving through
-`Connecting` → `Lobby` (and `InRound`/`Spectating` in later phases). It offers:
-
-- Signals: `SessionAdded`, `PlayerLoaded` (the client finished booting), `SessionRemoving`.
-- A **per-player Maid** (`GetMaid(player)`). Other systems should register per-player
-  connections and instances on it so they get cleaned up when the player leaves.
-- Queries: `GetSession`, `GetSessions`, `GetLoadedPlayers`, `GetPlayerCount`, `IsActive`, `SetStatus`.
-- It handles players who joined before the script ran (common in Studio), ignores
-  duplicate `ClientReady` calls, and logs a warning for clients that don't finish loading
-  within 30 s.
-
-### AdminService
-
-Admins are authorised **by UserId** via `Config.Admin.UserIds`. In Studio everyone counts
-as an admin, and the owner of a user-owned experience always does. For now the only admin
-tool is the read-only `DebugQuery("ServerState")` remote, and non-admins get `nil`. The
-full debug console (Phase 34) will check `AdminService.IsAdmin` on every command.
-
-### Shared utilities
-
-| Module | Purpose |
+| What | Key |
 |---|---|
-| `Logger` | Tagged logs filtered by level (`[VOIDLINE][S][PlayerManager] ...`). Debug level in Studio, Info and above in live games. `Logger.addSink` lets analytics hook in later. |
-| `Signal` | Script-side events. Handlers are `task.spawn`ed, so one handler erroring or yielding doesn't block the others. |
-| `Maid` | Cleans up connections, instances, threads and functions together. |
-| `RateLimiter` | Token bucket keyed per player. |
-| `Validate` | Runtime type checks you can combine, for remote arguments. |
-| `TableUtil` | `deepFreeze`, `deepCopy`, `count`. |
+| Infiltrator scaling | `Roles.InfiltratorScaling`, `MaxInfiltratorRatio` |
+| Pace | `Round.StabilityDecayPerMinute`, `Objectives.TasksPerPlayer`, `Round.StabilityPerCrewStep` |
+| Siphon | `Elimination.SiphonCooldown`, `CrowdBlockCount`, `StasisBleedSeconds` |
+| Sabotage | `Sabotage.GlobalCooldown`, per-sabotage `Cooldown` / `Duration` in `SabotageCatalog` |
+| Musters | `Meeting.DiscussionSeconds`, `VotingSeconds`, `RevealOnConfine` |
+| Endgame | `Escape.TotalSeconds`, `ExtractionCountdown` |
+| Events | `Events.MinInterval` / `MaxInterval`, weights in `EventCatalog` |
 
-`Config` and `Constants` are deep-frozen, so writing to them at runtime throws.
-`Config` replicates to clients, so **never put secrets in it**.
-
----
-
-## Testing Phase 1 in Roblox Studio
-
-### 1. Single-player boot
-
-Press **Play** (F5). You should see:
-
-- In the **Output** window:
-  - `[VOIDLINE][S][GameServer] Server ready (0.1.0-phase1) in X ms`
-  - `[VOIDLINE][S][PlayerManager] Session created: <you>`
-  - `[VOIDLINE][C][ClientMain] Client ready in X ms`
-  - `[VOIDLINE][S][PlayerManager] Client loaded: <you>`
-- On screen:
-  - A status panel in the bottom-left reading `Link: ONLINE`, `Ship state: LOBBY`,
-    `Crew aboard: 1`, `You: Lobby`, and `Build 0.1.0-phase1`.
-  - A toast at the top: `[INFO] Link established. Welcome aboard the ASTERION.`
-- In the Explorer, `ReplicatedStorage.Remotes` contains 6 remotes.
-
-### 2. Multiple players and leaving
-
-Go to **Test → Clients and Servers**, pick **3 players**, then **Start**.
-
-- Every client should show `Crew aboard: 3`.
-- Close one client window. The remaining clients should change to `Crew aboard: 2`, and
-  the server Output should show `Session ended: Player3`.
-
-### 3. Inspect server state (admin query)
-
-During Play, open the command bar with the client context selected (**Test → Current:
-Client**) and run:
-
-```lua
-local r = game.ReplicatedStorage.Remotes.DebugQuery
-print(r:InvokeServer("ServerState"))
-```
-
-You should get a table with `Version`, `UptimeSeconds`, `Players` (each with Status,
-IsLoaded and Strikes) and `Public` state.
-
-### 4. Exploit simulation
-
-Run each of these from the **client** command bar:
-
-```lua
--- a) Rate-limit flood: no errors, Output (Debug level) shows "Rate limited ClientReady".
-for i = 1, 50 do game.ReplicatedStorage.Remotes.ClientReady:FireServer() end
-
--- b) Malformed arguments: each call logs "Rejected DebugQuery ... argument 1: ...".
-local r = game.ReplicatedStorage.Remotes.DebugQuery
-print(r:InvokeServer(123))          --> nil
-print(r:InvokeServer(0/0))          --> nil
-print(r:InvokeServer("Nope"))       --> nil
-print(r:InvokeServer("ServerState", "extra")) --> nil (too many arguments)
-
--- c) Strike kick: about 16 seconds later the client is kicked with "Connection error".
-for i = 1, 20 do r:InvokeServer(i) task.wait(1.1) end
-
--- d) Privacy check: this must print nil. Other players' private state is never sent.
-print(game.Players.LocalPlayer:GetAttribute("Session"))
-```
-
-To test the **non-admin** path, set `Config.Admin.AllowStudioAdmins = false`, then Play
-and run test 3 again. It returns `nil`, and the server logs
-`Non-admin ... attempted DebugQuery`.
-
-### 5. Server shutdown
-
-In a **Clients and Servers** test, click **Cleanup**. The server Output should show
-`Server shutting down`. No service implements `Shutdown` yet; this just confirms the hook
-runs.
-
-### 6. Static checks (outside Studio)
-
-```bash
-./scripts/analyze.sh            # luau-lsp type check + lint against Roblox API definitions
-rojo build -o Voidline.rbxl     # confirms the project tree is valid
-```
+`docs/TESTING.md` lists the metrics to watch, which come from the analytics hooks.
 
 ---
 
-## Conventions
+## Status and limitations
 
-- Use `--!strict` on every file, and typed Luau wherever it's practical.
-- Services and controllers use PascalCase names and expose `Init`/`Start`/`Shutdown`.
-- Don't use globals. Keep module state as `local`s inside the module.
-- Get every remote name from `Net.Names`, and every tuning value from `Config`.
-- Before changing an existing system, read it first and keep compatible behaviour.
-  Don't silently overwrite it.
-- Originality rule: no names, lore, assets, sounds, UI or map layouts taken from other
-  games.
+**Done:** all twenty build phases are implemented. The full static type check passes with zero errors. The headless logic and catalog tests pass. Rojo builds a valid place file. There are no require cycles.
 
----
+**Not done:** the game has not been run in Roblox Studio. It has to be playtested before launch, as described in [docs/LAUNCH.md](docs/LAUNCH.md).
 
-## Roadmap
-
-| Phase | Scope | Status |
-|---|---|---|
-| 1 | Core structure, config, bootstraps, remotes, logging, PlayerManager | ✅ |
-| 2 | Lobby & player management (ready system, countdown, min/max players, private servers) | next |
-| 3 | Round state machine (`LOBBY` → … → `RESET`) | |
-| 4 | Secure role assignment | |
-| 5 | Basic ASTERION map | |
-| 6 | Interaction system | |
-| 7 | Objectives & mini-games | |
-| 8 | Sabotage | |
-| 9 | Evidence | |
-| 10 | Elimination | |
-| 11 | Meetings & voting | |
-| 12 | Escape / endgame | |
-| 13 | Full UI | |
-| 14 | Progression & DataStore | |
-| 15–20 | Audio/VFX, mobile & controller, optimisation, anti-exploit testing, balancing, polish | |
-
-## Known issues and limitations (Phase 1)
-
-- The status panel is a **temporary diagnostic HUD**. It's controlled by
-  `Config.Debug.ShowDebugHud` and is replaced in Phase 13.
-- `GameServer` sets `RoundState = LOBBY` as a placeholder. `RoundManager` takes over
-  this key in Phase 3.
-- Everyone is an admin in Studio by design. Live servers rely on `Config.Admin.UserIds`
-  and game ownership. Group-owned games need group-rank support, which comes in Phase 34.
-- Exploiters can see remote names. That's expected: security comes from server-side
-  validation, not from hiding names.
-- If `Signal:DisconnectAll()` runs while a thread is inside `Signal:Wait()`, that thread
-  never resumes. Avoid `Wait` on signals that may be destroyed.
-- Nothing is persisted yet. DataStore and session locking come in Phase 14.
+Known limitations:
+- **No audio assets ship with the game.** Every sound is a captioned placeholder. Add original or licensed sound IDs to `AudioCatalog`.
+- **Voice is Roblox's own spatial voice.** Comms jams garble text chat and block the radio, but they don't alter voice.
+- **Emotes need R15 avatars.** They use the default `Animate` script.
+- **Rejoining mid-round doesn't restore a role.** Roblox rejoins create a new session, so a player who rejoins spectates until the next round.
+- **Movement checks only correct.** They never kick a player for movement, because lag spikes can look like speed hacks.

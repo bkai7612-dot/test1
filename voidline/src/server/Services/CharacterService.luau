@@ -82,7 +82,7 @@ local function onCharacterAdded(player: Player, character: Model)
 		CharacterService.Spawn(player)
 		if p and MatchService.IsRunning() then
 			-- Back aboard: muster room is always safe to drop into.
-			local ring = MapService.SpawnRing("CentralOps", 8, 6)
+			local ring = MapService.SpawnRing("CentralOps", 8, 10)
 			MapService.Teleport(player, ring[math.random(1, #ring)])
 		end
 	end)

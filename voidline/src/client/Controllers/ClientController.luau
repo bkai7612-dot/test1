@@ -32,6 +32,8 @@ ClientController.PrivateChanged = Signal.new()
 ClientController.Notified = Signal.new()
 -- () fired once the first snapshot has been applied
 ClientController.Synced = Signal.new()
+-- (kind: string, data: table) one-shot cues from the server (VFX/audio/HUD)
+ClientController.ShipEvent = Signal.new()
 
 local publicState: { [string]: any } = {}
 local privateState: { [string]: any } = {}
@@ -115,10 +117,26 @@ function ClientController.Init()
 			ClientController.Notified:Fire(notification)
 		end
 	end)
+
+	Net.getEvent(Net.Names.ShipEvent).OnClientEvent:Connect(function(kind: any, data: any)
+		if type(kind) == "string" then
+			ClientController.ShipEvent:Fire(kind, if type(data) == "table" then data else {})
+		end
+	end)
 end
 
 function ClientController.Start()
 	task.spawn(fetchSnapshot)
+end
+
+-- Convenience accessors used across controllers and screens.
+function ClientController.GetRoundState(): string
+	return publicState.RoundState or "LOBBY"
+end
+
+-- This player's participant entry in the public roster, if any.
+function ClientController.IsParticipant(): boolean
+	return privateState.Life ~= nil
 end
 
 -- Tells the server this client finished booting. Called by ClientMain.

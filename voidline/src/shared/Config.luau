@@ -240,10 +240,6 @@ local Config = {
 		-- The owner of a user-owned experience is always an admin.
 		AllowGameOwner = true,
 	},
-
-	Debug = {
-		ShowDebugHud = false,
-	},
 }
 
 return TableUtil.deepFreeze(Config)

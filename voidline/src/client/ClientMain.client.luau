@@ -16,11 +16,21 @@ local Controllers = script.Parent:WaitForChild("Controllers")
 
 local log = Logger.new("ClientMain")
 
--- Explicit order. Add new controllers here as phases land
--- (InteractionController, VoiceController, EffectsController, ...).
+-- Explicit order: a controller may only require controllers listed before it.
 local CONTROLLER_ORDER = {
 	"ClientController",
+	"SettingsController",
+	"AudioController",
+	"CameraController",
+	"EffectsController",
+	"InputController",
+	"ChatController",
+	"VoiceController",
+	"InteractionController",
+	"MinigameController",
+	"NameplateController",
 	"UIController",
+	"TutorialController",
 }
 
 type LoadedController = { Name: string, Module: Types.Lifecycle }
@@ -40,7 +50,7 @@ for _, phase in { "Init", "Start" } do
 	for _, controller in loaded do
 		local fn = (controller.Module :: any)[phase]
 		if fn then
-			local ok, err = pcall(fn)
+			local ok: boolean, err: any = pcall(fn)
 			if not ok then
 				error(string.format("[ClientMain] %s.%s failed: %s", controller.Name, phase, tostring(err)))
 			end
